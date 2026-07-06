@@ -142,6 +142,23 @@ class MemorySubsystem:
             )
             await PreferenceRepository(session).set_model_alias(user.id, alias)
 
+    async def reset(self, payload: UnifiedPayload) -> None:
+        """Forget the conversation across all tiers, keeping the user's settings.
+
+        Clears the session window (RAM), semantic fragments (RAM) and the
+        persisted dialog history (DB). Model/persona preferences are untouched.
+        """
+        key = self.user_key(payload)
+        self._session.clear(key)
+        self._semantic.clear(key)
+        async with self._db.session() as session:
+            user = await UserRepository(session).get_or_create(
+                channel=payload.channel,
+                external_id=payload.external_user_id,
+                display_name=payload.display_name,
+            )
+            await DialogRepository(session).delete_for_user(user_id=user.id)
+
     async def get_persona_alias(self, payload: UnifiedPayload) -> str:
         """Return the user's current persona display alias (or 'свой'/default)."""
         async with self._db.session() as session:

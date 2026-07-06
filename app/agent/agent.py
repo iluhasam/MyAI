@@ -50,6 +50,10 @@ class Agent:
             return await self._list_personas(payload)
         if payload.command == "persona":
             return await self._select_persona(payload)
+        if payload.command == "status":
+            return await self._status(payload)
+        if payload.command == "reset":
+            return await self._reset(payload)
         try:
             context = await self._memory.load(payload)
             plan = self._planner.plan(payload, context)
@@ -103,6 +107,28 @@ class Agent:
         return AgentResponse(
             text=f"Готово — теперь отвечаю через «{alias}».",
             metadata={"current_model": alias},
+        )
+
+    # -- status / reset ----------------------------------------------------
+    async def _status(self, payload: UnifiedPayload) -> AgentResponse:
+        """`/status` — show the user's current model and persona."""
+        model = await self._memory.get_preferred_alias(payload)
+        persona = await self._memory.get_persona_alias(payload)
+        return AgentResponse(
+            text=(
+                f"Текущие настройки:\n"
+                f"• Модель: {model}  (сменить — /model, список — /models)\n"
+                f"• Стиль: {persona}  (сменить — /persona, список — /personas)"
+            ),
+            metadata={"current_model": model, "current_persona": persona},
+        )
+
+    async def _reset(self, payload: UnifiedPayload) -> AgentResponse:
+        """`/reset` — forget the conversation (settings are kept)."""
+        await self._memory.reset(payload)
+        return AgentResponse(
+            text="История разговора очищена — начинаем с чистого листа. "
+            "Выбранные модель и стиль сохранены."
         )
 
     # -- persona-selection commands ----------------------------------------

@@ -78,7 +78,24 @@ class TelegramAdapter:
             "attachments": attachments,
         }
 
+    async def _set_commands(self) -> None:  # pragma: no cover - requires aiogram runtime
+        """Register the slash-command menu shown when the user types '/'."""
+        from aiogram.types import BotCommand
+
+        await self._bot.set_my_commands(
+            [
+                BotCommand(command="status", description="Текущая модель и стиль"),
+                BotCommand(command="models", description="Список моделей"),
+                BotCommand(command="model", description="Выбрать модель: /model <название>"),
+                BotCommand(command="personas", description="Список стилей общения"),
+                BotCommand(command="persona", description="Выбрать стиль: /persona <название>"),
+                BotCommand(command="reset", description="Очистить историю разговора"),
+                BotCommand(command="help", description="Справка"),
+            ]
+        )
+
     async def run(self) -> None:  # pragma: no cover - requires network + token
         """Start long-polling. Blocks until cancelled."""
         _log.info("starting Telegram long-polling")
+        await self._set_commands()
         await self._dp.start_polling(self._bot)

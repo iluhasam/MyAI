@@ -46,6 +46,10 @@ class SemanticMemory:
         self._threshold = threshold
         self._store: dict[str, list[_Record]] = defaultdict(list)
 
+    def clear(self, user_key: str) -> None:
+        """Forget all stored fragments for a user (used by /reset)."""
+        self._store.pop(user_key, None)
+
     async def remember(self, user_key: str, text: str) -> None:
         """Embed and store a fragment for later associative retrieval.
 

@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import (
@@ -100,6 +100,13 @@ class DialogRepository:
         self._session.add(message)
         await self._session.flush()
         return message
+
+    async def delete_for_user(self, *, user_id: int) -> int:
+        """Delete a user's whole dialog history (used by /reset). Returns row count."""
+        result = await self._session.execute(
+            delete(DialogMessage).where(DialogMessage.user_id == user_id)
+        )
+        return result.rowcount or 0
 
     async def recent(self, *, user_id: int, limit: int = 30) -> list[DialogMessage]:
         stmt = (
