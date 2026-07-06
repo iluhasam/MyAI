@@ -51,7 +51,8 @@ class Executor:
             # No model step requested: return concatenated tool outputs verbatim.
             return "\n".join(r.output for r in results) or "Готово."
         messages = self._build_messages(payload, context, results)
-        return await self._llm.generate(messages)
+        # context.model carries the user's selected model (resolved from the catalog).
+        return await self._llm.generate(messages, model=context.model or None)
 
     # -- tool orchestration -------------------------------------------------
     async def _run_steps(self, plan: ExecutionPlan) -> list[ToolResult]:

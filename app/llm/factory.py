@@ -6,6 +6,8 @@ Unknown providers fail loud at startup rather than silently degrading.
 
 from __future__ import annotations
 
+import os
+
 from app.core.config import Settings
 from app.core.exceptions import ConfigurationError
 from app.core.logger import get_logger
@@ -16,7 +18,11 @@ _log = get_logger(__name__)
 
 
 def build_llm_client(settings: Settings) -> LLMClient:
-    """Return a concrete ``LLMClient`` for the configured provider."""
+    """Return a concrete ``LLMClient`` for the configured provider.
+
+    The concrete model per request is chosen by the caller (per-user selection);
+    the value passed here is only the fallback default.
+    """
     provider = settings.llm_provider.lower()
     if provider == "mock":
         _log.info("using MockLLMClient (deterministic, offline)")
@@ -25,5 +31,28 @@ def build_llm_client(settings: Settings) -> LLMClient:
         from app.llm.litellm_client import LiteLLMClient
 
         _log.info("using LiteLLMClient", extra={"model": settings.llm_model})
-        return LiteLLMClient(model=settings.llm_model, api_key=settings.llm_api_key)
+        return LiteLLMClient(
+            model=settings.llm_model,
+            api_key=settings.llm_api_key,
+            embedding_model=settings.llm_embedding_model or None,
+        )
+    if provider == "openrouter":
+        from app.llm.catalog import ModelCatalog
+        from app.llm.litellm_client import LiteLLMClient
+
+        key = settings.openrouter_api_key or settings.llm_api_key
+        if not key:
+            raise ConfigurationError(
+                "OPENROUTER_API_KEY is empty; set it in .env or use LLM_PROVIDER=mock"
+            )
+        # LiteLLM reads OPENROUTER_API_KEY from the environment for openrouter/* models.
+        os.environ.setdefault("OPENROUTER_API_KEY", key)
+        catalog = ModelCatalog(default_alias=settings.default_model)
+        fallback = catalog.resolve(catalog.default_alias)
+        embedding_model = settings.llm_embedding_model or "openrouter/openai/text-embedding-3-small"
+        _log.info(
+            "using OpenRouter via LiteLLM",
+            extra={"default_model": fallback, "embedding_model": embedding_model},
+        )
+        return LiteLLMClient(model=fallback, api_key=key, embedding_model=embedding_model)
     raise ConfigurationError(f"unknown LLM_PROVIDER={settings.llm_provider!r}")

@@ -26,7 +26,7 @@ _BASE_DELAY = 0.5
 class LiteLLMClient:
     """Thin adapter over ``litellm.acompletion`` / ``aembedding``."""
 
-    def __init__(self, *, model: str, api_key: str) -> None:
+    def __init__(self, *, model: str, api_key: str, embedding_model: str | None = None) -> None:
         try:
             import litellm  # noqa: F401  (validate availability early)
         except ImportError as exc:  # pragma: no cover - depends on optional install
@@ -35,9 +35,16 @@ class LiteLLMClient:
             ) from exc
         self._model = model
         self._api_key = api_key or None
+        # Embeddings need a dedicated embedding model — chat models can't embed.
+        self._embedding_model = embedding_model or model
 
     async def generate(
-        self, messages: Sequence[ChatMessage], *, temperature: float = 0.7, max_tokens: int = 1024
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        model: str | None = None,
     ) -> str:
         import litellm
 
@@ -45,7 +52,7 @@ class LiteLLMClient:
 
         async def _call() -> str:
             resp = await litellm.acompletion(
-                model=self._model,
+                model=model or self._model,  # per-call override (user-selected model)
                 messages=payload,
                 temperature=temperature,
                 max_tokens=max_tokens,
@@ -78,7 +85,7 @@ class LiteLLMClient:
 
         async def _call() -> list[list[float]]:
             resp = await litellm.aembedding(
-                model=self._model, input=list(texts), api_key=self._api_key
+                model=self._embedding_model, input=list(texts), api_key=self._api_key
             )
             return [item["embedding"] for item in resp["data"]]
 

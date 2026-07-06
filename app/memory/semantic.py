@@ -13,7 +13,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Sequence
 
+from app.core.logger import get_logger
 from app.llm.base import LLMClient
+
+_log = get_logger(__name__)
 
 # Only fragments at/above this cosine similarity are injected into the prompt.
 DEFAULT_SIMILARITY_THRESHOLD = 0.82
@@ -44,18 +47,26 @@ class SemanticMemory:
         self._store: dict[str, list[_Record]] = defaultdict(list)
 
     async def remember(self, user_key: str, text: str) -> None:
-        """Embed and store a fragment for later associative retrieval."""
+        """Embed and store a fragment for later associative retrieval.
+
+        Auxiliary to the reply: an embedding failure (e.g. provider outage) is
+        logged and skipped, never propagated — it must not fail the user's turn.
+        """
         if not text.strip():
             return
-        (vector,) = await self._llm.embeddings([text])
-        self._store[user_key].append(_Record(text=text, vector=vector))
+        vectors = await self._safe_embed(text)
+        if vectors is None:
+            return
+        self._store[user_key].append(_Record(text=text, vector=vectors))
 
     async def search(self, user_key: str, query: str, *, top_k: int = 3) -> list[str]:
         """Return up to ``top_k`` fragments above the similarity threshold."""
         records = self._store.get(user_key)
         if not records or not query.strip():
             return []
-        (q_vec,) = await self._llm.embeddings([query])
+        q_vec = await self._safe_embed(query)
+        if q_vec is None:
+            return []
         scored = [
             (cosine_similarity(q_vec, r.vector), r.text)
             for r in records
@@ -63,3 +74,12 @@ class SemanticMemory:
         scored = [pair for pair in scored if pair[0] >= self._threshold]
         scored.sort(key=lambda pair: pair[0], reverse=True)
         return [text for _, text in scored[:top_k]]
+
+    async def _safe_embed(self, text: str) -> list[float] | None:
+        """Embed one text, returning ``None`` (not raising) if the provider fails."""
+        try:
+            (vector,) = await self._llm.embeddings([text])
+            return vector
+        except Exception as exc:  # semantic memory is best-effort, never fatal
+            _log.warning("embedding failed; skipping semantic memory", extra={"error": str(exc)})
+            return None

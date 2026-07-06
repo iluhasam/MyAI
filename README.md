@@ -30,7 +30,7 @@ app/
   agent/      оркестратор когнитивного цикла
   planner/    декомпозиция запроса в ExecutionPlan (без побочных эффектов)
   executor/   исполнение плана + сборка безопасного промпта + синтез ответа
-  llm/        единый интерфейс generate/vision/embeddings (mock | litellm)
+  llm/        единый интерфейс generate/vision/embeddings (mock | openrouter) + каталог моделей
   memory/     трёхуровневая память: session / long / semantic
   tools/      реестр инструментов + безопасный калькулятор
   database/   async SQLAlchemy 2.0, модели, репозитории, Outbox + publisher
@@ -61,7 +61,8 @@ python -m app.main api          # поднимает HTTP на API_HOST:API_PORT
 ```
 
 Эндпоинты: `GET /health`, `POST /chat` (`{"user_id": "...", "text": "..."}`),
-`GET /metrics` (обработанные turns, подавленные дубли, backlog outbox по статусам).
+`GET /models` (список доступных моделей), `GET /metrics` (обработанные turns,
+подавленные дубли, backlog outbox по статусам).
 Интерактивная OpenAPI-документация — на `/docs`. Тот же когнитивный стек, что у CLI/Telegram.
 
 ```bash
@@ -70,8 +71,34 @@ curl -s http://127.0.0.1:8000/chat \
   -d '{"user_id":"u1","text":"(2+3)*4"}'
 ```
 
-Реальная модель: в `.env` задайте `LLM_PROVIDER=litellm`, `LLM_MODEL`, `LLM_API_KEY`
-и установите `pip install litellm`.
+### Выбор модели (несколько моделей, индивидуально на пользователя)
+
+Каталог доступных моделей — [app/llm/catalog.py](app/llm/catalog.py) (алиас → провайдерская
+строка). Каждый пользователь выбирает свою модель командой, выбор хранится в БД
+(таблица `user_preferences`) и применяется к его следующим запросам:
+
+```
+/models              # список моделей, текущая помечена «← сейчас»
+/model claude        # переключиться (варианты: gpt-4o-mini, gpt-4o, claude, gemini, llama, deepseek)
+```
+
+Выбор индивидуален: у Алисы может быть `claude`, у Боба — `gemini`, не мешая друг другу.
+
+### Реальные модели через OpenRouter (один ключ — много моделей)
+
+```bash
+pip install litellm
+# .env:
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-...      # ключ с openrouter.ai
+DEFAULT_MODEL=gpt-4o-mini         # модель по умолчанию для новых пользователей
+```
+
+Один ключ OpenRouter даёт доступ к GPT, Claude, Gemini, Llama, DeepSeek и др. Эмбеддинги
+семантической памяти используют отдельную embedding-модель (`LLM_EMBEDDING_MODEL`, для
+OpenRouter подставляется рабочая по умолчанию) и **не-фатальны** — их сбой не ломает ответ.
+
+Альтернатива — прямой провайдер: `LLM_PROVIDER=litellm`, `LLM_MODEL`, `LLM_API_KEY`.
 
 ## Тесты
 

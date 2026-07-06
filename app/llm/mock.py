@@ -21,7 +21,12 @@ class MockLLMClient:
     """A dependency-free, deterministic stand-in for a real LLM provider."""
 
     async def generate(
-        self, messages: Sequence[ChatMessage], *, temperature: float = 0.7, max_tokens: int = 1024
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        model: str | None = None,
     ) -> str:
         last_user = next(
             (m.content for m in reversed(messages) if m.role is Role.USER), ""
@@ -29,7 +34,9 @@ class MockLLMClient:
         tool_context = " ".join(
             m.content for m in messages if m.role is Role.SYSTEM and "TOOL_RESULT" in m.content
         )
-        reply = f"[mock-llm] Вы написали: {last_user.strip()[:500]}"
+        # Echo the selected model so model-selection is observable offline (tests).
+        tag = f"mock-llm:{model}" if model else "mock-llm"
+        reply = f"[{tag}] Вы написали: {last_user.strip()[:500]}"
         if tool_context:
             reply += f"\nРезультаты инструментов учтены: {tool_context.strip()[:500]}"
         return reply

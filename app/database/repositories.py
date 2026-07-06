@@ -14,7 +14,13 @@ from typing import Sequence
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import DialogMessage, OutboxEvent, OutboxStatus, User
+from app.database.models import (
+    DialogMessage,
+    OutboxEvent,
+    OutboxStatus,
+    User,
+    UserPreference,
+)
 
 
 class UserRepository:
@@ -33,6 +39,26 @@ class UserRepository:
             self._session.add(user)
             await self._session.flush()  # assign PK without ending the transaction
         return user
+
+
+class PreferenceRepository:
+    """Read/write per-user preferences (currently the selected model alias)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_model_alias(self, user_id: int) -> str | None:
+        pref = await self._session.get(UserPreference, user_id)
+        return pref.model_alias if pref is not None else None
+
+    async def set_model_alias(self, user_id: int, alias: str) -> None:
+        """Upsert the user's model choice."""
+        pref = await self._session.get(UserPreference, user_id)
+        if pref is None:
+            self._session.add(UserPreference(user_id=user_id, model_alias=alias))
+        else:
+            pref.model_alias = alias
+        await self._session.flush()
 
 
 class DialogRepository:

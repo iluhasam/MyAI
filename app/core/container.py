@@ -25,6 +25,7 @@ if TYPE_CHECKING:  # imported only for type hints; no runtime cost / cycles
     from app.database.outbox_publisher import OutboxPublisher
     from app.gateway.gateway import Gateway
     from app.llm.base import LLMClient
+    from app.llm.catalog import ModelCatalog
     from app.memory.memory import MemorySubsystem
     from app.router.router import Router
 
@@ -88,6 +89,15 @@ class Container:
         return self._get("llm", factory)
 
     @property
+    def catalog(self) -> "ModelCatalog":
+        def factory() -> "ModelCatalog":
+            from app.llm.catalog import ModelCatalog
+
+            return ModelCatalog(default_alias=self._settings.default_model)
+
+        return self._get("catalog", factory)
+
+    @property
     def memory(self) -> "MemorySubsystem":
         def factory() -> "MemorySubsystem":
             from app.memory.memory import MemorySubsystem
@@ -95,6 +105,7 @@ class Container:
             return MemorySubsystem(
                 database=self.database,
                 llm=self.llm,
+                catalog=self.catalog,
                 session_window=self._settings.memory_session_window,
             )
 
@@ -114,6 +125,7 @@ class Container:
                 planner=Planner(llm=self.llm),
                 executor=Executor(tool_manager=tool_manager, llm=self.llm),
                 memory=self.memory,
+                catalog=self.catalog,
             )
 
         return self._get("agent", factory)

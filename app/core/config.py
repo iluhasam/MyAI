@@ -49,9 +49,16 @@ class Settings(BaseSettings):
     )
 
     # --- LLM ---
-    llm_provider: str = Field(default="mock", alias="LLM_PROVIDER")
+    llm_provider: str = Field(default="mock", alias="LLM_PROVIDER")  # mock | litellm | openrouter
     llm_model: str = Field(default="gpt-4o-mini", alias="LLM_MODEL")
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
+    # OpenRouter: one key, many models (see app/llm/catalog.py).
+    openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
+    # Alias (from the catalog) used when a user hasn't picked a model yet.
+    default_model: str = Field(default="gpt-4o-mini", alias="DEFAULT_MODEL")
+    # Embedding model for semantic memory. Chat models can't embed, so this is a
+    # dedicated model; empty falls back to the chat model (fine for the mock).
+    llm_embedding_model: str = Field(default="", alias="LLM_EMBEDDING_MODEL")
 
     # --- Memory ---
     memory_session_window: int = Field(default=30, ge=1, le=200, alias="MEMORY_SESSION_WINDOW")

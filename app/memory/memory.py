@@ -16,9 +16,15 @@ from dataclasses import dataclass, field
 
 from app.core.logger import get_logger
 from app.database.database import Database
-from app.database.repositories import DialogRepository, OutboxRepository, UserRepository
+from app.database.repositories import (
+    DialogRepository,
+    OutboxRepository,
+    PreferenceRepository,
+    UserRepository,
+)
 from app.gateway.payload import UnifiedPayload
 from app.llm.base import ChatMessage, LLMClient, Role
+from app.llm.catalog import ModelCatalog
 from app.memory.semantic import SemanticMemory
 from app.memory.session import SessionMemory
 
@@ -33,15 +39,25 @@ class MemoryContext:
     user_key: str
     recent_messages: list[ChatMessage] = field(default_factory=list)
     semantic_snippets: list[str] = field(default_factory=list)
+    model_alias: str = ""  # user's selected model alias (or catalog default)
+    model: str = ""  # resolved provider model string passed to the LLM client
 
 
 class MemorySubsystem:
     """Coordinates Session (RAM), Long (SQL) and Semantic (vector) memory."""
 
-    def __init__(self, *, database: Database, llm: LLMClient, session_window: int = 30) -> None:
+    def __init__(
+        self,
+        *,
+        database: Database,
+        llm: LLMClient,
+        catalog: ModelCatalog,
+        session_window: int = 30,
+    ) -> None:
         self._db = database
         self._session = SessionMemory(window=session_window)
         self._semantic = SemanticMemory(llm)
+        self._catalog = catalog
 
     @staticmethod
     def user_key(payload: UnifiedPayload) -> str:
@@ -58,6 +74,10 @@ class MemorySubsystem:
                 display_name=payload.display_name,
             )
             user_id = user.id
+            stored_alias = await PreferenceRepository(session).get_model_alias(user_id)
+
+        model_alias = self._catalog.alias_or_default(stored_alias)
+        model = self._catalog.resolve(model_alias)
 
         recent = self._session.history(key)
         if not recent:
@@ -70,8 +90,34 @@ class MemorySubsystem:
 
         snippets = await self._semantic.search(key, payload.text)
         return MemoryContext(
-            user_id=user_id, user_key=key, recent_messages=recent, semantic_snippets=snippets
+            user_id=user_id,
+            user_key=key,
+            recent_messages=recent,
+            semantic_snippets=snippets,
+            model_alias=model_alias,
+            model=model,
         )
+
+    async def get_preferred_alias(self, payload: UnifiedPayload) -> str:
+        """Return the user's current model alias (or the catalog default)."""
+        async with self._db.session() as session:
+            user = await UserRepository(session).get_or_create(
+                channel=payload.channel,
+                external_id=payload.external_user_id,
+                display_name=payload.display_name,
+            )
+            stored = await PreferenceRepository(session).get_model_alias(user.id)
+        return self._catalog.alias_or_default(stored)
+
+    async def set_preferred_model(self, payload: UnifiedPayload, alias: str) -> None:
+        """Persist the user's model choice (alias must be valid per the catalog)."""
+        async with self._db.session() as session:
+            user = await UserRepository(session).get_or_create(
+                channel=payload.channel,
+                external_id=payload.external_user_id,
+                display_name=payload.display_name,
+            )
+            await PreferenceRepository(session).set_model_alias(user.id, alias)
 
     async def record_turn(
         self, ctx: MemoryContext, *, user_text: str, assistant_text: str, channel: str

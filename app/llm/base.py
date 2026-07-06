@@ -33,9 +33,14 @@ class LLMClient(Protocol):
     """Provider-agnostic async LLM surface used throughout the platform."""
 
     async def generate(
-        self, messages: Sequence[ChatMessage], *, temperature: float = 0.7, max_tokens: int = 1024
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        model: str | None = None,
     ) -> str:
-        """Return a text completion for a chat message sequence."""
+        """Return a text completion. ``model`` overrides the client default per call."""
         ...
 
     async def vision(self, prompt: str, *, image_url: str) -> str:

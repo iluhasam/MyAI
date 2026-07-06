@@ -59,3 +59,17 @@ class MetricsResponse(BaseModel):
     turns_answered: int
     duplicate_events_suppressed: int
     outbox: OutboxCounts
+
+
+class ModelOut(BaseModel):
+    """One selectable model, as shown to API clients."""
+
+    alias: str
+    label: str
+
+
+class ModelsResponse(BaseModel):
+    """The catalog of models a user may switch between via ``/model <alias>``."""
+
+    default: str
+    models: list[ModelOut]

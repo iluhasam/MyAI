@@ -18,6 +18,8 @@ from app.api.schemas import (
     ChatResponse,
     HealthResponse,
     MetricsResponse,
+    ModelOut,
+    ModelsResponse,
     OutboxCounts,
 )
 from app.core.container import Container
@@ -66,6 +68,15 @@ def create_api(container: Container) -> FastAPI:
             turns_answered=snap["turns_answered"],
             duplicate_events_suppressed=snap["duplicate_events_suppressed"],
             outbox=OutboxCounts(**outbox),
+        )
+
+    @app.get("/models", response_model=ModelsResponse, tags=["chat"])
+    async def models() -> ModelsResponse:
+        """List selectable models. Users switch with the `/model <alias>` command."""
+        catalog = container.catalog
+        return ModelsResponse(
+            default=catalog.default_alias,
+            models=[ModelOut(alias=m.alias, label=m.label) for m in catalog.list()],
         )
 
     @app.post("/chat", response_model=ChatResponse, tags=["chat"])

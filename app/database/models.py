@@ -52,6 +52,25 @@ class User(Base):
     )
 
 
+class UserPreference(Base):
+    """Per-user settings (currently: the selected model alias).
+
+    A separate table (rather than columns on ``users``) so new preferences can be
+    added without migrating the users table — and ``create_all`` provisions it
+    cleanly alongside an already-populated database.
+    """
+
+    __tablename__ = "user_preferences"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    model_alias: Mapped[str] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class DialogMessage(Base):
     """A single turn of conversation (session / long dialog history)."""
 

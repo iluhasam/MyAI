@@ -55,6 +55,15 @@ def test_chat_validation_rejects_empty_text(client: TestClient):
     assert resp.status_code == 422  # pydantic min_length violation
 
 
+def test_models_endpoint(client: TestClient):
+    resp = client.get("/models")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["default"] == "gpt-4o-mini"
+    aliases = [m["alias"] for m in body["models"]]
+    assert "claude" in aliases and "gemini" in aliases
+
+
 def test_metrics_endpoint(client: TestClient):
     client.post("/chat", json={"user_id": "m", "text": "привет"})
     resp = client.get("/metrics")
