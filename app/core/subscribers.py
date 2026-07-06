@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from app.core.container import Container
 from app.core.events import Event
+from app.core.idempotency import IdempotencyGuard
 from app.core.logger import get_logger
 
 _log = get_logger(__name__)
@@ -28,5 +29,10 @@ async def _on_message_answered(event: Event) -> None:
 
 
 def register_default_subscribers(container: Container) -> None:
-    """Attach the platform's built-in event handlers to the bus."""
-    container.event_bus.subscribe("message.answered", _on_message_answered)
+    """Attach the platform's built-in event handlers to the bus.
+
+    Handlers are wrapped in an :class:`IdempotencyGuard` so an at-least-once
+    redelivery from the Outbox (same stable event id) runs its side effects once.
+    """
+    guard = IdempotencyGuard(max_size=container.settings.idempotency_cache_size)
+    container.event_bus.subscribe("message.answered", guard.wrap(_on_message_answered))

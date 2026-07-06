@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     )
     outbox_max_attempts: int = Field(default=5, ge=1, le=100, alias="OUTBOX_MAX_ATTEMPTS")
 
+    # --- Idempotency (consumer-side dedup of at-least-once redeliveries) ---
+    idempotency_cache_size: int = Field(
+        default=10_000, ge=1, le=1_000_000, alias="IDEMPOTENCY_CACHE_SIZE"
+    )
+
     # --- Telegram (optional transport) ---
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
 
