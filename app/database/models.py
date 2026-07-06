@@ -88,6 +88,23 @@ class DialogMessage(Base):
     user: Mapped["User"] = relationship(back_populates="messages")
 
 
+class SemanticRecord(Base):
+    """A persisted semantic-memory fragment: text + its embedding vector.
+
+    Makes associative memory survive restarts (it used to live only in RAM). The
+    vector is stored as JSON; cosine search loads a user's rows and ranks them.
+    A production build would move this to a vector DB (Qdrant/pgvector).
+    """
+
+    __tablename__ = "semantic_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_key: Mapped[str] = mapped_column(String(160), index=True)
+    text: Mapped[str] = mapped_column(Text)
+    vector_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class OutboxEvent(Base):
     """Durable event record written in the same transaction as the domain change."""
 

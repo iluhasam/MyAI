@@ -1,31 +1,27 @@
 """Semantic (associative) memory: retrieve past context by meaning, not recency.
 
-Backed by an in-memory vector index for the MVP (drop-in target: Qdrant). Text
-is embedded via the LLM client; retrieval returns only fragments whose cosine
-similarity to the query exceeds a safety threshold, preventing loosely-related
-or adversarial context from leaking into the generation window.
+Fragments are embedded via the LLM client and **persisted in the database**, so
+associative memory survives restarts (it used to live only in RAM). Retrieval
+loads a user's fragments and returns only those whose cosine similarity to the
+query exceeds a safety threshold — keeping loosely-related or adversarial context
+out of the generation window. Drop-in target for scale: a vector DB (Qdrant).
 """
 
 from __future__ import annotations
 
+import json
 import math
-from collections import defaultdict
-from dataclasses import dataclass
 from typing import Sequence
 
 from app.core.logger import get_logger
+from app.database.database import Database
+from app.database.repositories import SemanticRepository
 from app.llm.base import LLMClient
 
 _log = get_logger(__name__)
 
 # Only fragments at/above this cosine similarity are injected into the prompt.
 DEFAULT_SIMILARITY_THRESHOLD = 0.82
-
-
-@dataclass(slots=True)
-class _Record:
-    text: str
-    vector: list[float]
 
 
 def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
@@ -39,41 +35,53 @@ def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
 
 
 class SemanticMemory:
-    """Per-user vector store with threshold-gated similarity search."""
+    """Per-user, DB-backed vector store with threshold-gated similarity search."""
 
-    def __init__(self, llm: LLMClient, *, threshold: float = DEFAULT_SIMILARITY_THRESHOLD) -> None:
+    def __init__(
+        self,
+        llm: LLMClient,
+        database: Database,
+        *,
+        threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
+    ) -> None:
         self._llm = llm
+        self._db = database
         self._threshold = threshold
-        self._store: dict[str, list[_Record]] = defaultdict(list)
 
-    def clear(self, user_key: str) -> None:
+    async def clear(self, user_key: str) -> None:
         """Forget all stored fragments for a user (used by /reset)."""
-        self._store.pop(user_key, None)
+        async with self._db.session() as session:
+            await SemanticRepository(session).delete_for_user(user_key=user_key)
 
     async def remember(self, user_key: str, text: str) -> None:
-        """Embed and store a fragment for later associative retrieval.
+        """Embed and persist a fragment for later associative retrieval.
 
         Auxiliary to the reply: an embedding failure (e.g. provider outage) is
         logged and skipped, never propagated — it must not fail the user's turn.
         """
         if not text.strip():
             return
-        vectors = await self._safe_embed(text)
-        if vectors is None:
+        vector = await self._safe_embed(text)
+        if vector is None:
             return
-        self._store[user_key].append(_Record(text=text, vector=vectors))
+        async with self._db.session() as session:
+            await SemanticRepository(session).add(
+                user_key=user_key, text=text, vector_json=json.dumps(vector)
+            )
 
     async def search(self, user_key: str, query: str, *, top_k: int = 3) -> list[str]:
         """Return up to ``top_k`` fragments above the similarity threshold."""
-        records = self._store.get(user_key)
-        if not records or not query.strip():
+        if not query.strip():
+            return []
+        async with self._db.session() as session:
+            records = await SemanticRepository(session).for_user(user_key=user_key)
+        if not records:
             return []
         q_vec = await self._safe_embed(query)
         if q_vec is None:
             return []
         scored = [
-            (cosine_similarity(q_vec, r.vector), r.text)
-            for r in records
+            (cosine_similarity(q_vec, json.loads(r.vector_json)), r.text) for r in records
         ]
         scored = [pair for pair in scored if pair[0] >= self._threshold]
         scored.sort(key=lambda pair: pair[0], reverse=True)

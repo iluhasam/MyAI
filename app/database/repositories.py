@@ -18,6 +18,7 @@ from app.database.models import (
     DialogMessage,
     OutboxEvent,
     OutboxStatus,
+    SemanticRecord,
     User,
     UserPreference,
 )
@@ -117,6 +118,35 @@ class DialogRepository:
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return list(reversed(rows))  # chronological order
+
+
+class SemanticRepository:
+    """Persist and retrieve semantic-memory fragments per user."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, *, user_key: str, text: str, vector_json: str) -> None:
+        self._session.add(
+            SemanticRecord(user_key=user_key, text=text, vector_json=vector_json)
+        )
+        await self._session.flush()
+
+    async def for_user(self, *, user_key: str, limit: int = 500) -> list[SemanticRecord]:
+        """Return a user's most recent fragments (bounded to keep search cheap)."""
+        stmt = (
+            select(SemanticRecord)
+            .where(SemanticRecord.user_key == user_key)
+            .order_by(SemanticRecord.id.desc())
+            .limit(limit)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def delete_for_user(self, *, user_key: str) -> int:
+        result = await self._session.execute(
+            delete(SemanticRecord).where(SemanticRecord.user_key == user_key)
+        )
+        return result.rowcount or 0
 
 
 class OutboxRepository:

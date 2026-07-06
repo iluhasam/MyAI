@@ -60,7 +60,7 @@ class MemorySubsystem:
     ) -> None:
         self._db = database
         self._session = SessionMemory(window=session_window)
-        self._semantic = SemanticMemory(llm)
+        self._semantic = SemanticMemory(llm, database)
         self._catalog = catalog
         self._personas = personas
 
@@ -150,7 +150,7 @@ class MemorySubsystem:
         """
         key = self.user_key(payload)
         self._session.clear(key)
-        self._semantic.clear(key)
+        await self._semantic.clear(key)
         async with self._db.session() as session:
             user = await UserRepository(session).get_or_create(
                 channel=payload.channel,
