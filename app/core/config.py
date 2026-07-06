@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
     # OpenRouter: one key, many models (see app/llm/catalog.py).
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
+    # Direct Google Gemini key (free tier); used for catalog `gemini/*` routes.
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     # Alias (from the catalog) used when a user hasn't picked a model yet.
     default_model: str = Field(default="gpt-4o-mini", alias="DEFAULT_MODEL")
     # Embedding model for semantic memory. Chat models can't embed, so this is a

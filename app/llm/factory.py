@@ -45,14 +45,19 @@ def build_llm_client(settings: Settings) -> LLMClient:
             raise ConfigurationError(
                 "OPENROUTER_API_KEY is empty; set it in .env or use LLM_PROVIDER=mock"
             )
-        # LiteLLM reads OPENROUTER_API_KEY from the environment for openrouter/* models.
-        os.environ.setdefault("OPENROUTER_API_KEY", key)
+        # Multi-provider routing: LiteLLM picks the provider from the model prefix
+        # (openrouter/* vs gemini/*) and reads that provider's key from the env.
+        # We therefore set env keys and pass NO per-call api_key, so each model
+        # reaches its own provider with its own credentials.
+        os.environ["OPENROUTER_API_KEY"] = key
+        if settings.gemini_api_key:
+            os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
         catalog = ModelCatalog(default_alias=settings.default_model)
         fallback = catalog.resolve(catalog.default_alias)
         embedding_model = settings.llm_embedding_model or "openrouter/openai/text-embedding-3-small"
         _log.info(
-            "using OpenRouter via LiteLLM",
+            "using multi-provider LiteLLM (OpenRouter + direct Gemini)",
             extra={"default_model": fallback, "embedding_model": embedding_model},
         )
-        return LiteLLMClient(model=fallback, api_key=key, embedding_model=embedding_model)
+        return LiteLLMClient(model=fallback, api_key=None, embedding_model=embedding_model)
     raise ConfigurationError(f"unknown LLM_PROVIDER={settings.llm_provider!r}")

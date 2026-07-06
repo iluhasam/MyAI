@@ -31,7 +31,7 @@ _DEFAULT_MODELS: tuple[ModelInfo, ...] = (
     ModelInfo("gpt-4o-mini", "openrouter/openai/gpt-4o-mini", "OpenAI GPT-4o mini — быстрая и дешёвая"),
     ModelInfo("gpt-4o", "openrouter/openai/gpt-4o", "OpenAI GPT-4o — мощная, дороже"),
     ModelInfo("claude", "openrouter/anthropic/claude-sonnet-4", "Anthropic Claude Sonnet 4"),
-    ModelInfo("gemini", "openrouter/google/gemini-2.5-flash", "Google Gemini 2.5 Flash — быстрая"),
+    ModelInfo("gemini", "gemini/gemini-2.5-flash", "Google Gemini 2.5 Flash — прямой Google, free tier"),
     ModelInfo("llama", "openrouter/meta-llama/llama-3.1-8b-instruct", "Meta Llama 3.1 8B — дешёвая"),
     ModelInfo("deepseek", "openrouter/deepseek/deepseek-chat", "DeepSeek Chat — дешёвая, сильная"),
 )
