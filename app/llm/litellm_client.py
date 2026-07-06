@@ -26,7 +26,9 @@ _BASE_DELAY = 0.5
 class LiteLLMClient:
     """Thin adapter over ``litellm.acompletion`` / ``aembedding``."""
 
-    def __init__(self, *, model: str, api_key: str, embedding_model: str | None = None) -> None:
+    def __init__(
+        self, *, model: str, api_key: str | None, embedding_model: str | None = None
+    ) -> None:
         try:
             import litellm  # noqa: F401  (validate availability early)
         except ImportError as exc:  # pragma: no cover - depends on optional install

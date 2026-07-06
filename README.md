@@ -1,5 +1,7 @@
 # AI Agent Platform
 
+[![CI](https://github.com/iluhasam/MyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/iluhasam/MyAI/actions/workflows/ci.yml)
+
 Многоканальная платформа персональных ИИ-агентов на принципах Clean Architecture
 и асинхронного событийно-ориентированного взаимодействия. Транспорт (Telegram/CLI)
 изолирован от когнитивного ядра; каналы подключаются без изменения логики.
