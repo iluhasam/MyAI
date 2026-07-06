@@ -18,6 +18,7 @@ from app.core.config import Settings, get_settings
 from app.core.events import EventBus
 from app.core.logger import get_logger
 from app.core.metrics import Metrics
+from app.core.ratelimit import RateLimiter
 
 if TYPE_CHECKING:  # imported only for type hints; no runtime cost / cycles
     from app.agent.agent import Agent
@@ -70,6 +71,16 @@ class Container:
     @property
     def metrics(self) -> Metrics:
         return self._get("metrics", Metrics)
+
+    @property
+    def rate_limiter(self) -> RateLimiter:
+        def factory() -> RateLimiter:
+            return RateLimiter(
+                per_minute=self._settings.rate_limit_per_minute,
+                per_day=self._settings.rate_limit_per_day,
+            )
+
+        return self._get("rate_limiter", factory)
 
     @property
     def database(self) -> "Database":
@@ -138,6 +149,7 @@ class Container:
                 memory=self.memory,
                 catalog=self.catalog,
                 personas=self.personas,
+                rate_limiter=self.rate_limiter if self._settings.rate_limit_enabled else None,
             )
 
         return self._get("agent", factory)

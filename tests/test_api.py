@@ -24,6 +24,7 @@ def client(tmp_path: Path):
         llm_provider="mock",
         app_log_level="WARNING",
         outbox_publisher_enabled=False,
+        rate_limit_enabled=False,
     )
     app = create_api(Container(settings=settings))
     with TestClient(app) as c:  # __enter__ runs the lifespan (startup/shutdown)

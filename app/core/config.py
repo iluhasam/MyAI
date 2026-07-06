@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     # --- Persona (communication style) ---
     default_persona: str = Field(default="обычный", alias="DEFAULT_PERSONA")
 
+    # --- Rate limiting (per-user, in-process) ---
+    rate_limit_enabled: bool = Field(default=True, alias="RATE_LIMIT_ENABLED")
+    rate_limit_per_minute: int = Field(default=15, ge=1, le=1000, alias="RATE_LIMIT_PER_MINUTE")
+    rate_limit_per_day: int = Field(default=200, ge=1, le=100_000, alias="RATE_LIMIT_PER_DAY")
+
     # --- Memory ---
     memory_session_window: int = Field(default=30, ge=1, le=200, alias="MEMORY_SESSION_WINDOW")
 

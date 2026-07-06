@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from app.core.exceptions import PlatformError
 from app.core.logger import get_logger
+from app.core.ratelimit import RateLimiter
 from app.executor.executor import Executor
 from app.gateway.payload import AgentResponse, UnifiedPayload
 from app.llm.catalog import ModelCatalog
@@ -18,6 +19,11 @@ from app.persona import CUSTOM_ALIAS, MAX_CUSTOM_LEN, PersonaCatalog
 from app.planner.planner import Planner
 
 _log = get_logger(__name__)
+
+_RATE_MESSAGES = {
+    "minute": "Слишком часто 🙂 Подожди немного и напиши снова.",
+    "daily": "Достигнут дневной лимит запросов. Возвращайся завтра — настройки сохранены.",
+}
 
 
 class Agent:
@@ -31,12 +37,14 @@ class Agent:
         memory: MemorySubsystem,
         catalog: ModelCatalog,
         personas: PersonaCatalog,
+        rate_limiter: RateLimiter | None = None,
     ) -> None:
         self._planner = planner
         self._executor = executor
         self._memory = memory
         self._catalog = catalog
         self._personas = personas
+        self._rate_limiter = rate_limiter
 
     async def process(self, payload: UnifiedPayload) -> AgentResponse:
         """Run one cognitive turn and return the reply."""
@@ -54,6 +62,13 @@ class Agent:
             return await self._status(payload)
         if payload.command == "reset":
             return await self._reset(payload)
+
+        # Rate-limit only LLM-consuming turns (the commands above are free).
+        if self._rate_limiter is not None:
+            key = f"{payload.channel}:{payload.external_user_id}"
+            decision = self._rate_limiter.check(key)
+            if not decision.allowed:
+                return AgentResponse(text=_RATE_MESSAGES.get(decision.reason, _RATE_MESSAGES["minute"]))
         try:
             context = await self._memory.load(payload)
             plan = self._planner.plan(payload, context)
