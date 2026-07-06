@@ -24,6 +24,7 @@
 app/
   core/       конфиг, логгер, исключения, event bus, DI-контейнер, lifecycle
   bot/        тонкие транспорты: CLI (рабочий), Telegram (aiogram, опц.)
+  api/        REST-транспорт на FastAPI (/health, /chat) — тот же Gateway-стек
   gateway/    нормализация в UnifiedPayload + санитаризация (anti prompt-injection, PII)
   router/     классификатор типов и маршрутизация по конвейерам
   agent/      оркестратор когнитивного цикла
@@ -51,6 +52,21 @@ Telegram-режим (нужен токен и `pip install aiogram`):
 
 ```bash
 LLM_PROVIDER=mock TELEGRAM_BOT_TOKEN=xxx python -m app.main telegram
+```
+
+REST API-режим (FastAPI/uvicorn уже в requirements):
+
+```bash
+python -m app.main api          # поднимает HTTP на API_HOST:API_PORT (по умолч. 127.0.0.1:8000)
+```
+
+Эндпоинты: `GET /health`, `POST /chat` (`{"user_id": "...", "text": "..."}`).
+Интерактивная OpenAPI-документация — на `/docs`. Тот же когнитивный стек, что у CLI/Telegram.
+
+```bash
+curl -s http://127.0.0.1:8000/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"user_id":"u1","text":"(2+3)*4"}'
 ```
 
 Реальная модель: в `.env` задайте `LLM_PROVIDER=litellm`, `LLM_MODEL`, `LLM_API_KEY`

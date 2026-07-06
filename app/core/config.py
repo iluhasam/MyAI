@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # --- Telegram (optional transport) ---
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
 
+    # --- REST API (optional transport) ---
+    api_host: str = Field(default="127.0.0.1", alias="API_HOST")
+    api_port: int = Field(default=8000, ge=1, le=65535, alias="API_PORT")
+
     @field_validator("app_log_level")
     @classmethod
     def _normalise_log_level(cls, value: str) -> str:
