@@ -1,0 +1,29 @@
+# Keep the build context small and secrets/artefacts out of the image.
+.git
+.gitignore
+.venv
+venv
+env
+# Match __pycache__/.pyc at ANY depth (bare name only matches the context root).
+**/__pycache__
+**/*.pyc
+**/*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# Secrets & local state — provided at run time, never baked in.
+.env
+.env.*
+!.env.example
+data/
+*.db
+*.sqlite3
+
+# Dev-only files not needed at runtime.
+tests/
+scripts/
+project.bundle
+*.md

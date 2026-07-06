@@ -105,6 +105,26 @@ OpenRouter; каждый вызов уходит своему провайдер
 
 Альтернатива — прямой провайдер: `LLM_PROVIDER=litellm`, `LLM_MODEL`, `LLM_API_KEY`.
 
+## Docker
+
+Один образ обслуживает все режимы; транспорт выбирается переменной `APP_MODE`.
+
+```bash
+cp .env.example .env            # впишите ключи (OPENROUTER_API_KEY и т.д.)
+
+# REST API (по умолчанию, токен не нужен):
+docker compose up --build       # http://localhost:8000  (/docs, /models, /metrics)
+
+# Telegram-бот: в .env задайте APP_MODE=telegram и TELEGRAM_BOT_TOKEN, затем:
+docker compose up --build
+```
+
+- Секреты берутся из `.env` во время запуска (`env_file`), **в образ не попадают**
+  (`.env` в `.dockerignore`).
+- База SQLite сохраняется на хосте через том `./data`, переживает перезапуски.
+- `restart: unless-stopped` — контейнер сам поднимается после перезагрузки/сбоя.
+- Образ работает от непривилегированного пользователя (`appuser`).
+
 ## Тесты
 
 ```bash

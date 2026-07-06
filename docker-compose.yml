@@ -1,0 +1,28 @@
+# AI Agent Platform — container deployment.
+#
+# Usage:
+#   1. Copy .env.example -> .env and fill in keys (OPENROUTER_API_KEY, etc.).
+#   2. REST API (default, no token needed):   docker compose up --build
+#   3. Telegram bot: set APP_MODE=telegram and TELEGRAM_BOT_TOKEN in .env, then
+#      docker compose up --build
+#
+# The transport is selected by APP_MODE (default "api"). The SQLite database is
+# persisted on the host via the ./data volume so it survives container restarts.
+
+services:
+  app:
+    build: .
+    image: ai-agent-platform:latest
+    env_file:
+      - .env
+    # API_HOST/PORT are forced here so the server is reachable from the host in
+    # api mode; harmless in telegram mode (nothing listens there).
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+    command: ["python", "-m", "app.main", "${APP_MODE:-api}"]
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
