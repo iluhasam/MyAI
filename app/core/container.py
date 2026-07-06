@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable, TypeVar
 from app.core.config import Settings, get_settings
 from app.core.events import EventBus
 from app.core.logger import get_logger
+from app.core.metrics import Metrics
 
 if TYPE_CHECKING:  # imported only for type hints; no runtime cost / cycles
     from app.agent.agent import Agent
@@ -63,6 +64,10 @@ class Container:
     @property
     def event_bus(self) -> EventBus:
         return self._get("event_bus", EventBus)
+
+    @property
+    def metrics(self) -> Metrics:
+        return self._get("metrics", Metrics)
 
     @property
     def database(self) -> "Database":

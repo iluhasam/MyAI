@@ -42,3 +42,20 @@ class HealthResponse(BaseModel):
 
     status: str = "ok"
     env: str
+
+
+class OutboxCounts(BaseModel):
+    """Outbox backlog broken down by delivery status."""
+
+    pending: int = 0
+    published: int = 0
+    failed: int = 0
+    dead: int = 0
+
+
+class MetricsResponse(BaseModel):
+    """Operational counters for scraping/monitoring."""
+
+    turns_answered: int
+    duplicate_events_suppressed: int
+    outbox: OutboxCounts

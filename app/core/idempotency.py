@@ -15,6 +15,7 @@ window measured in seconds. A distributed deployment would back this with Redis
 from __future__ import annotations
 
 from collections import OrderedDict
+from typing import Callable
 
 from app.core.events import Event, Handler
 from app.core.logger import get_logger
@@ -30,10 +31,13 @@ class IdempotencyGuard:
     another's, since they see the same event id.
     """
 
-    def __init__(self, *, max_size: int = 10_000) -> None:
+    def __init__(
+        self, *, max_size: int = 10_000, on_duplicate: Callable[[], None] | None = None
+    ) -> None:
         if max_size < 1:
             raise ValueError("max_size must be >= 1")
         self._max_size = max_size
+        self._on_duplicate = on_duplicate
         self._seen: OrderedDict[str, None] = OrderedDict()
         self.duplicates = 0  # observability counter: how many redeliveries were skipped
 
@@ -53,6 +57,8 @@ class IdempotencyGuard:
         async def guarded(event: Event) -> None:
             if self._mark(event.id):
                 self.duplicates += 1
+                if self._on_duplicate is not None:
+                    self._on_duplicate()
                 _log.info("duplicate event suppressed", extra={"event_id": event.id})
                 return
             await handler(event)

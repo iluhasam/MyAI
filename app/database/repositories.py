@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import DialogMessage, OutboxEvent, OutboxStatus, User
@@ -88,6 +88,14 @@ class OutboxRepository:
             .with_for_update(skip_locked=True)  # safe concurrent draining (no-op on SQLite)
         )
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def count_by_status(self) -> dict[str, int]:
+        """Return outbox row counts keyed by status (every status present, default 0)."""
+        counts = {status.value: 0 for status in OutboxStatus}
+        stmt = select(OutboxEvent.status, func.count()).group_by(OutboxEvent.status)
+        for status, count in (await self._session.execute(stmt)).all():
+            counts[status] = count
+        return counts
 
     async def mark_published(self, event_id: int) -> None:
         await self._session.execute(

@@ -13,10 +13,17 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI
 
-from app.api.schemas import ChatRequest, ChatResponse, HealthResponse
+from app.api.schemas import (
+    ChatRequest,
+    ChatResponse,
+    HealthResponse,
+    MetricsResponse,
+    OutboxCounts,
+)
 from app.core.container import Container
 from app.core.lifecycle import shutdown, startup
 from app.core.logger import get_logger
+from app.database.repositories import OutboxRepository
 from app.gateway.gateway import RawInbound
 
 _log = get_logger(__name__)
@@ -48,6 +55,18 @@ def create_api(container: Container) -> FastAPI:
     async def health() -> HealthResponse:
         """Liveness probe: confirms the process is up and reports the env."""
         return HealthResponse(env=container.settings.app_env.value)
+
+    @app.get("/metrics", response_model=MetricsResponse, tags=["ops"])
+    async def metrics() -> MetricsResponse:
+        """Operational counters: answered turns, suppressed dupes, outbox backlog."""
+        async with container.database.session() as session:
+            outbox = await OutboxRepository(session).count_by_status()
+        snap = container.metrics.snapshot()
+        return MetricsResponse(
+            turns_answered=snap["turns_answered"],
+            duplicate_events_suppressed=snap["duplicate_events_suppressed"],
+            outbox=OutboxCounts(**outbox),
+        )
 
     @app.post("/chat", response_model=ChatResponse, tags=["chat"])
     async def chat(req: ChatRequest) -> ChatResponse:

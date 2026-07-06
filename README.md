@@ -60,7 +60,8 @@ REST API-режим (FastAPI/uvicorn уже в requirements):
 python -m app.main api          # поднимает HTTP на API_HOST:API_PORT (по умолч. 127.0.0.1:8000)
 ```
 
-Эндпоинты: `GET /health`, `POST /chat` (`{"user_id": "...", "text": "..."}`).
+Эндпоинты: `GET /health`, `POST /chat` (`{"user_id": "...", "text": "..."}`),
+`GET /metrics` (обработанные turns, подавленные дубли, backlog outbox по статусам).
 Интерактивная OpenAPI-документация — на `/docs`. Тот же когнитивный стек, что у CLI/Telegram.
 
 ```bash

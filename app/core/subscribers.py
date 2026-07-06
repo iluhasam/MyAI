@@ -33,6 +33,17 @@ def register_default_subscribers(container: Container) -> None:
 
     Handlers are wrapped in an :class:`IdempotencyGuard` so an at-least-once
     redelivery from the Outbox (same stable event id) runs its side effects once.
+    Counters feed the ``/metrics`` endpoint: answered turns are counted inside the
+    guard (effectively-once), suppressed redeliveries via the guard's callback.
     """
-    guard = IdempotencyGuard(max_size=container.settings.idempotency_cache_size)
-    container.event_bus.subscribe("message.answered", guard.wrap(_on_message_answered))
+    metrics = container.metrics
+    guard = IdempotencyGuard(
+        max_size=container.settings.idempotency_cache_size,
+        on_duplicate=metrics.inc_duplicate,
+    )
+
+    async def on_answered(event: Event) -> None:
+        await _on_message_answered(event)
+        metrics.inc_turn()
+
+    container.event_bus.subscribe("message.answered", guard.wrap(on_answered))

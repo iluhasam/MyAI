@@ -55,6 +55,17 @@ def test_chat_validation_rejects_empty_text(client: TestClient):
     assert resp.status_code == 422  # pydantic min_length violation
 
 
+def test_metrics_endpoint(client: TestClient):
+    client.post("/chat", json={"user_id": "m", "text": "привет"})
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    body = resp.json()
+    # The turn enqueued a durable event; the relay is off in tests, so it stays pending.
+    assert body["outbox"]["pending"] >= 1
+    assert body["turns_answered"] == 0
+    assert "duplicate_events_suppressed" in body
+
+
 def test_session_memory_persists_across_requests(client: TestClient):
     client.post("/chat", json={"user_id": "ctx", "text": "первое сообщение"})
     resp = client.post("/chat", json={"user_id": "ctx", "text": "второе сообщение"})
