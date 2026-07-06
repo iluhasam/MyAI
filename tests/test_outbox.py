@@ -52,6 +52,58 @@ async def test_outbox_marks_published(container):
     assert await publisher.drain_once() == 0
 
 
+class _ExplodingBus:
+    """A bus whose publish always fails — to drive the retry/dead-letter path."""
+
+    async def publish(self, event) -> None:  # noqa: D401
+        raise RuntimeError("broker unavailable")
+
+
+@pytest.mark.asyncio
+async def test_failed_event_retries_then_dead_letters(container):
+    """A repeatedly-failing event is retried up to the budget, then dead-lettered."""
+    async with container.database.session() as session:
+        await OutboxRepository(session).enqueue(event_name="poison.event", payload={})
+
+    publisher = OutboxPublisher(container.database, _ExplodingBus(), max_attempts=3)
+
+    async def status_and_attempts() -> tuple[str, int]:
+        async with container.database.session() as session:
+            row = (await session.execute(select(OutboxEvent))).scalar_one()
+            return row.status, row.attempts
+
+    # Attempts 1 and 2 keep the row retryable (FAILED); nothing is published.
+    assert await publisher.drain_once() == 0
+    assert await status_and_attempts() == (OutboxStatus.FAILED.value, 1)
+    assert await publisher.drain_once() == 0
+    assert await status_and_attempts() == (OutboxStatus.FAILED.value, 2)
+
+    # Attempt 3 exhausts the budget -> dead-letter (terminal).
+    assert await publisher.drain_once() == 0
+    assert await status_and_attempts() == (OutboxStatus.DEAD.value, 3)
+
+    # A DEAD row is no longer deliverable, so further drains are no-ops.
+    assert await publisher.drain_once() == 0
+
+
+@pytest.mark.asyncio
+async def test_relayed_event_has_stable_id_for_idempotency(container):
+    """The relayed event id is derived from the row id so redeliveries dedupe."""
+    async with container.database.session() as session:
+        row = await OutboxRepository(session).enqueue(event_name="id.event", payload={})
+        row_id = row.id
+
+    seen_ids: list[str] = []
+
+    async def handler(event) -> None:
+        seen_ids.append(event.id)
+
+    container.event_bus.subscribe("id.event", handler)
+    await OutboxPublisher(container.database, container.event_bus).drain_once()
+
+    assert seen_ids == [f"outbox-{row_id}"]
+
+
 @pytest.mark.asyncio
 async def test_turn_enqueues_message_answered_atomically(container):
     """A completed turn writes a PENDING 'message.answered' event transactionally."""

@@ -140,6 +140,7 @@ class Container:
                 self.database,
                 self.event_bus,
                 interval=self._settings.outbox_poll_interval,
+                max_attempts=self._settings.outbox_max_attempts,
             )
 
         return self._get("outbox_publisher", factory)

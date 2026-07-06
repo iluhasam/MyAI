@@ -24,9 +24,10 @@ class Base(DeclarativeBase):
 
 
 class OutboxStatus(str, Enum):
-    PENDING = "pending"
-    PUBLISHED = "published"
-    FAILED = "failed"
+    PENDING = "pending"      # never attempted yet
+    PUBLISHED = "published"  # relayed successfully (terminal)
+    FAILED = "failed"        # attempt failed, still retryable
+    DEAD = "dead"            # exceeded max attempts — dead-letter (terminal)
 
 
 class User(Base):

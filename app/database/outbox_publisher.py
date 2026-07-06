@@ -22,27 +22,56 @@ _log = get_logger(__name__)
 class OutboxPublisher:
     """Periodically drains the outbox and emits events onto the bus."""
 
-    def __init__(self, database: Database, event_bus: EventBus, *, interval: float = 1.0) -> None:
+    def __init__(
+        self,
+        database: Database,
+        event_bus: EventBus,
+        *,
+        interval: float = 1.0,
+        max_attempts: int = 5,
+    ) -> None:
         self._db = database
         self._bus = event_bus
         self._interval = interval
+        self._max_attempts = max_attempts
         self._task: asyncio.Task[None] | None = None
         self._stopped = asyncio.Event()
 
     async def drain_once(self, *, batch: int = 100) -> int:
-        """Publish up to ``batch`` pending events. Returns the number published."""
+        """Relay up to ``batch`` deliverable events. Returns the number published.
+
+        Failures are retried on later ticks (status FAILED) until the attempt
+        budget is spent, after which the row is dead-lettered (status DEAD) so a
+        single poison event never blocks the queue or loops forever. The relayed
+        event carries a **stable id** derived from the row, so a redelivery after
+        a crash is deduplicable by idempotent consumers.
+        """
         published = 0
         async with self._db.session() as session:
             repo = OutboxRepository(session)
-            for row in await repo.fetch_pending(limit=batch):
+            for row in await repo.fetch_deliverable(limit=batch):
                 try:
                     payload = json.loads(row.payload_json)
-                    await self._bus.publish(Event(name=row.event_name, payload=payload))
+                    event = Event(
+                        name=row.event_name, payload=payload, id=f"outbox-{row.id}"
+                    )
+                    await self._bus.publish(event)
                     await repo.mark_published(row.id)
                     published += 1
-                except Exception:  # keep draining others; row stays retryable
-                    _log.exception("failed to publish outbox event", extra={"id": row.id})
-                    await repo.mark_failed(row.id)
+                except Exception:
+                    attempts = row.attempts + 1
+                    if attempts >= self._max_attempts:
+                        _log.error(
+                            "outbox event dead-lettered (retries exhausted)",
+                            extra={"id": row.id, "event": row.event_name, "attempts": attempts},
+                        )
+                        await repo.mark_dead(row.id, attempts=attempts)
+                    else:
+                        _log.warning(
+                            "outbox publish failed; will retry",
+                            extra={"id": row.id, "event": row.event_name, "attempts": attempts},
+                        )
+                        await repo.mark_retry(row.id, attempts=attempts)
         return published
 
     async def _run(self) -> None:

@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     outbox_poll_interval: float = Field(
         default=1.0, gt=0.0, le=60.0, alias="OUTBOX_POLL_INTERVAL"
     )
+    outbox_max_attempts: int = Field(default=5, ge=1, le=100, alias="OUTBOX_MAX_ATTEMPTS")
 
     # --- Telegram (optional transport) ---
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")

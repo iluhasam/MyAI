@@ -71,10 +71,18 @@ class OutboxRepository:
         await self._session.flush()
         return event
 
-    async def fetch_pending(self, *, limit: int = 100) -> Sequence[OutboxEvent]:
+    # Statuses eligible for (re)delivery: brand-new and previously-failed rows.
+    _DELIVERABLE = (OutboxStatus.PENDING.value, OutboxStatus.FAILED.value)
+
+    async def fetch_deliverable(self, *, limit: int = 100) -> Sequence[OutboxEvent]:
+        """Fetch rows awaiting delivery — PENDING or retryable FAILED, oldest first.
+
+        DEAD (dead-lettered) and PUBLISHED rows are terminal and never returned,
+        so a poison event can neither be retried forever nor block the queue.
+        """
         stmt = (
             select(OutboxEvent)
-            .where(OutboxEvent.status == OutboxStatus.PENDING.value)
+            .where(OutboxEvent.status.in_(self._DELIVERABLE))
             .order_by(OutboxEvent.created_at)
             .limit(limit)
             .with_for_update(skip_locked=True)  # safe concurrent draining (no-op on SQLite)
@@ -88,9 +96,18 @@ class OutboxRepository:
             .values(status=OutboxStatus.PUBLISHED.value, published_at=datetime.now(timezone.utc))
         )
 
-    async def mark_failed(self, event_id: int) -> None:
+    async def mark_retry(self, event_id: int, *, attempts: int) -> None:
+        """A delivery attempt failed but the event is still within its retry budget."""
         await self._session.execute(
             update(OutboxEvent)
             .where(OutboxEvent.id == event_id)
-            .values(status=OutboxStatus.FAILED.value, attempts=OutboxEvent.attempts + 1)
+            .values(status=OutboxStatus.FAILED.value, attempts=attempts)
+        )
+
+    async def mark_dead(self, event_id: int, *, attempts: int) -> None:
+        """Exhausted the retry budget — move to the dead-letter state (terminal)."""
+        await self._session.execute(
+            update(OutboxEvent)
+            .where(OutboxEvent.id == event_id)
+            .values(status=OutboxStatus.DEAD.value, attempts=attempts)
         )
