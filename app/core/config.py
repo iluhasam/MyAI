@@ -76,4 +76,5 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return th
+    """Return the process-wide settings singleton (parsed once, then cached)."""
+    return Settings()
