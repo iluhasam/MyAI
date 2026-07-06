@@ -14,22 +14,28 @@ from typing import AsyncIterator
 
 from app.core.container import Container
 from app.core.logger import get_logger, setup_logging
+from app.core.subscribers import register_default_subscribers
 
 _log = get_logger(__name__)
 
 
 async def startup(container: Container) -> None:
-    """Initialise resources in dependency order (logging -> db schema)."""
+    """Initialise resources in dependency order (logging -> db schema -> outbox)."""
     setup_logging(container.settings.app_log_level)
     _log.info("starting up", extra={"env": container.settings.app_env.value})
     await container.database.connect()
     await container.database.create_all()
+    register_default_subscribers(container)
+    if container.settings.outbox_publisher_enabled:
+        container.outbox_publisher.start()
     _log.info("startup complete")
 
 
 async def shutdown(container: Container) -> None:
     """Release resources in reverse order. Safe to call more than once."""
     _log.info("shutting down")
+    if container.settings.outbox_publisher_enabled:
+        await container.outbox_publisher.stop()
     await container.database.disconnect()
     _log.info("shutdown complete")
 

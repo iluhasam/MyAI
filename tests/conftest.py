@@ -25,6 +25,8 @@ def settings(tmp_path: Path) -> Settings:
         database_url=f"sqlite+aiosqlite:///{db_file}",
         llm_provider="mock",
         app_log_level="WARNING",
+        # Keep the background relay off so tests drive the publisher deterministically.
+        outbox_publisher_enabled=False,
     )
 
 

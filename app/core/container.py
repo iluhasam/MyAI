@@ -21,6 +21,7 @@ from app.core.logger import get_logger
 if TYPE_CHECKING:  # imported only for type hints; no runtime cost / cycles
     from app.agent.agent import Agent
     from app.database.database import Database
+    from app.database.outbox_publisher import OutboxPublisher
     from app.gateway.gateway import Gateway
     from app.llm.base import LLMClient
     from app.memory.memory import MemorySubsystem
@@ -108,7 +109,6 @@ class Container:
                 planner=Planner(llm=self.llm),
                 executor=Executor(tool_manager=tool_manager, llm=self.llm),
                 memory=self.memory,
-                event_bus=self.event_bus,
             )
 
         return self._get("agent", factory)
@@ -130,3 +130,16 @@ class Container:
             return Gateway(router=self.router)
 
         return self._get("gateway", factory)
+
+    @property
+    def outbox_publisher(self) -> "OutboxPublisher":
+        def factory() -> "OutboxPublisher":
+            from app.database.outbox_publisher import OutboxPublisher
+
+            return OutboxPublisher(
+                self.database,
+                self.event_bus,
+                interval=self._settings.outbox_poll_interval,
+            )
+
+        return self._get("outbox_publisher", factory)

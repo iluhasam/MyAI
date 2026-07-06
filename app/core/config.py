@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     # --- Memory ---
     memory_session_window: int = Field(default=30, ge=1, le=200, alias="MEMORY_SESSION_WINDOW")
 
+    # --- Outbox (transactional event relay) ---
+    outbox_publisher_enabled: bool = Field(default=True, alias="OUTBOX_PUBLISHER_ENABLED")
+    outbox_poll_interval: float = Field(
+        default=1.0, gt=0.0, le=60.0, alias="OUTBOX_POLL_INTERVAL"
+    )
+
     # --- Telegram (optional transport) ---
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
 

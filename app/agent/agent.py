@@ -8,7 +8,6 @@ failed turn never crashes the transport.
 
 from __future__ import annotations
 
-from app.core.events import Event, EventBus
 from app.core.exceptions import PlatformError
 from app.core.logger import get_logger
 from app.executor.executor import Executor
@@ -28,12 +27,10 @@ class Agent:
         planner: Planner,
         executor: Executor,
         memory: MemorySubsystem,
-        event_bus: EventBus,
     ) -> None:
         self._planner = planner
         self._executor = executor
         self._memory = memory
-        self._bus = event_bus
 
     async def process(self, payload: UnifiedPayload) -> AgentResponse:
         """Run one cognitive turn and return the reply."""
@@ -43,14 +40,13 @@ class Agent:
             _log.debug("plan ready", extra={"steps": len(plan.steps), "why": plan.rationale})
 
             answer = await self._executor.execute(plan, payload, context)
+            # record_turn persists the turn AND enqueues the ``message.answered``
+            # event in one transaction; the OutboxPublisher relays it to the bus.
             await self._memory.record_turn(
-                context, user_text=payload.text, assistant_text=answer
-            )
-            await self._bus.publish(
-                Event(
-                    name="message.answered",
-                    payload={"user_key": context.user_key, "channel": payload.channel},
-                )
+                context,
+                user_text=payload.text,
+                assistant_text=answer,
+                channel=payload.channel,
             )
             return AgentResponse(text=answer)
         except PlatformError as exc:

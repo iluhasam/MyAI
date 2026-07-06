@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from app.core.logger import get_logger
 from app.database.database import Database
-from app.database.repositories import DialogRepository, UserRepository
+from app.database.repositories import DialogRepository, OutboxRepository, UserRepository
 from app.gateway.payload import UnifiedPayload
 from app.llm.base import ChatMessage, LLMClient, Role
 from app.memory.semantic import SemanticMemory
@@ -73,8 +73,16 @@ class MemorySubsystem:
             user_id=user_id, user_key=key, recent_messages=recent, semantic_snippets=snippets
         )
 
-    async def record_turn(self, ctx: MemoryContext, *, user_text: str, assistant_text: str) -> None:
-        """Persist a completed turn to all three tiers."""
+    async def record_turn(
+        self, ctx: MemoryContext, *, user_text: str, assistant_text: str, channel: str
+    ) -> None:
+        """Persist a completed turn to all three tiers.
+
+        The long-memory write and the ``message.answered`` outbox event commit in
+        **one transaction** (transactional Outbox): either both land or neither
+        does, so a durable event can never be lost or emitted for an un-persisted
+        turn. A background :class:`OutboxPublisher` relays it onto the bus.
+        """
         user_msg = ChatMessage(role=Role.USER, content=user_text)
         assistant_msg = ChatMessage(role=Role.ASSISTANT, content=assistant_text)
 
@@ -82,9 +90,13 @@ class MemorySubsystem:
         self._session.append(ctx.user_key, assistant_msg)
 
         async with self._db.session() as session:
-            repo = DialogRepository(session)
-            await repo.add(user_id=ctx.user_id, role=Role.USER.value, content=user_text)
-            await repo.add(user_id=ctx.user_id, role=Role.ASSISTANT.value, content=assistant_text)
+            dialog = DialogRepository(session)
+            await dialog.add(user_id=ctx.user_id, role=Role.USER.value, content=user_text)
+            await dialog.add(user_id=ctx.user_id, role=Role.ASSISTANT.value, content=assistant_text)
+            await OutboxRepository(session).enqueue(
+                event_name="message.answered",
+                payload={"user_key": ctx.user_key, "user_id": ctx.user_id, "channel": channel},
+            )
 
         await self._semantic.remember(ctx.user_key, user_text)
         _log.debug("turn recorded", extra={"user": ctx.user_key})
