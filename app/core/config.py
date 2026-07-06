@@ -35,6 +35,7 @@ class Settings(BaseSettings):
         env_prefix="",
         extra="ignore",
         case_sensitive=False,
+        populate_by_name=True,  # allow constructing Settings(field_name=...) in tests
     )
 
     # --- Application ---
@@ -75,5 +76,4 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return the process-wide settings singleton (parsed once, then cached)."""
-    return Settings()
+    """Return th
