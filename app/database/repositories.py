@@ -1,0 +1,96 @@
+"""Repositories: focused, testable data-access objects over ORM sessions.
+
+Each repository takes an ``AsyncSession`` (supplied by the caller's transaction),
+so several repositories can participate in one atomic unit of work — the basis
+for the Outbox pattern, where a domain write and its outbox event commit together.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from typing import Sequence
+
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.models import DialogMessage, OutboxEvent, OutboxStatus, User
+
+
+class UserRepository:
+    """CRUD for :class:`User`, keyed by (channel, external_id)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_or_create(
+        self, *, channel: str, external_id: str, display_name: str | None = None
+    ) -> User:
+        stmt = select(User).where(User.channel == channel, User.external_id == external_id)
+        user = (await self._session.execute(stmt)).scalar_one_or_none()
+        if user is None:
+            user = User(channel=channel, external_id=external_id, display_name=display_name)
+            self._session.add(user)
+            await self._session.flush()  # assign PK without ending the transaction
+        return user
+
+
+class DialogRepository:
+    """Append/read persistent dialog history (long-term conversation memory)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, *, user_id: int, role: str, content: str) -> DialogMessage:
+        message = DialogMessage(user_id=user_id, role=role, content=content)
+        self._session.add(message)
+        await self._session.flush()
+        return message
+
+    async def recent(self, *, user_id: int, limit: int = 30) -> list[DialogMessage]:
+        stmt = (
+            select(DialogMessage)
+            .where(DialogMessage.user_id == user_id)
+            .order_by(DialogMessage.id.desc())
+            .limit(limit)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return list(reversed(rows))  # chronological order
+
+
+class OutboxRepository:
+    """Transactional Outbox: enqueue events and relay them at-least-once."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def enqueue(self, *, event_name: str, payload: dict[str, object]) -> OutboxEvent:
+        """Write an event in the *current* transaction (atomic with domain writes)."""
+        event = OutboxEvent(event_name=event_name, payload_json=json.dumps(payload, default=str))
+        self._session.add(event)
+        await self._session.flush()
+        return event
+
+    async def fetch_pending(self, *, limit: int = 100) -> Sequence[OutboxEvent]:
+        stmt = (
+            select(OutboxEvent)
+            .where(OutboxEvent.status == OutboxStatus.PENDING.value)
+            .order_by(OutboxEvent.created_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True)  # safe concurrent draining (no-op on SQLite)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def mark_published(self, event_id: int) -> None:
+        await self._session.execute(
+            update(OutboxEvent)
+            .where(OutboxEvent.id == event_id)
+            .values(status=OutboxStatus.PUBLISHED.value, published_at=datetime.now(timezone.utc))
+        )
+
+    async def mark_failed(self, event_id: int) -> None:
+        await self._session.execute(
+            update(OutboxEvent)
+            .where(OutboxEvent.id == event_id)
+            .values(status=OutboxStatus.FAILED.value, attempts=OutboxEvent.attempts + 1)
+        )
