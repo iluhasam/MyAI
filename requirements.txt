@@ -1,0 +1,19 @@
+# --- Core runtime (lightweight MVP stack) ---
+pydantic>=2.6,<3.0
+pydantic-settings>=2.2,<3.0
+
+# --- Database (async SQLAlchemy 2.0 + SQLite for MVP) ---
+SQLAlchemy[asyncio]>=2.0.29,<2.1
+aiosqlite>=0.20.0
+
+# --- Optional transport (Telegram). The bot layer is framework-agnostic;
+#     install aiogram only if you actually run the Telegram adapter. ---
+# aiogram>=3.4,<4.0
+
+# --- Optional real LLM provider. The LLM layer works with a built-in mock
+#     out of the box; install litellm to enable real providers. ---
+# litellm>=1.35,<2.0
+
+# --- Dev / test ---
+pytest>=8.0
+pytest-asyncio>=0.23

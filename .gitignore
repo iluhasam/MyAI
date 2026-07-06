@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Local databases / artifacts
+*.db
+*.sqlite3
+data/
+.cache/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Tests / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Git bundle export (regenerated)
+project.bundle
+
+# IDE
+.idea/
+.vscode/
