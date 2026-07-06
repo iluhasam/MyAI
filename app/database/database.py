@@ -60,7 +60,32 @@ class Database:
         engine = self._require_engine()
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(self._ensure_added_columns)
         _log.info("schema ensured")
+
+    @staticmethod
+    def _ensure_added_columns(sync_conn) -> None:
+        """Idempotently add columns introduced after a table was first created.
+
+        ``create_all`` never ALTERs an existing table, so columns added later
+        (e.g. persona fields on ``user_preferences``) must be backfilled here.
+        ``ALTER TABLE ... ADD COLUMN`` is compatible with SQLite and PostgreSQL.
+        """
+        from sqlalchemy import inspect, text
+
+        added: dict[str, list[tuple[str, str]]] = {
+            "user_preferences": [("persona_alias", "VARCHAR(64)"), ("persona_custom", "TEXT")],
+        }
+        inspector = inspect(sync_conn)
+        existing_tables = set(inspector.get_table_names())
+        for table, columns in added.items():
+            if table not in existing_tables:
+                continue  # freshly created by create_all with all columns present
+            have = {c["name"] for c in inspector.get_columns(table)}
+            for name, ddl_type in columns:
+                if name not in have:
+                    sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl_type}"))
+                    _log.info("added column", extra={"table": table, "column": name})
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:

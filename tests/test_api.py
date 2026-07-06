@@ -64,6 +64,15 @@ def test_models_endpoint(client: TestClient):
     assert "claude" in aliases and "gemini" in aliases
 
 
+def test_personas_endpoint(client: TestClient):
+    resp = client.get("/personas")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["default"] == "обычный"
+    aliases = [p["alias"] for p in body["personas"]]
+    assert "философ" in aliases and "программист" in aliases
+
+
 def test_metrics_endpoint(client: TestClient):
     client.post("/chat", json={"user_id": "m", "text": "привет"})
     resp = client.get("/metrics")

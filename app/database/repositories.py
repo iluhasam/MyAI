@@ -51,13 +51,41 @@ class PreferenceRepository:
         pref = await self._session.get(UserPreference, user_id)
         return pref.model_alias if pref is not None else None
 
+    async def get_persona(self, user_id: int) -> tuple[str | None, str | None]:
+        """Return the user's ``(persona_alias, persona_custom)`` or ``(None, None)``."""
+        pref = await self._session.get(UserPreference, user_id)
+        if pref is None:
+            return None, None
+        return pref.persona_alias, pref.persona_custom
+
     async def set_model_alias(self, user_id: int, alias: str) -> None:
-        """Upsert the user's model choice."""
+        """Upsert the user's model choice (leaves persona untouched)."""
         pref = await self._session.get(UserPreference, user_id)
         if pref is None:
             self._session.add(UserPreference(user_id=user_id, model_alias=alias))
         else:
             pref.model_alias = alias
+        await self._session.flush()
+
+    async def set_persona(
+        self,
+        user_id: int,
+        *,
+        alias: str | None,
+        custom: str | None,
+        default_model_alias: str,
+    ) -> None:
+        """Upsert the user's persona choice (leaves the model choice untouched).
+
+        A row may be created here before the user ever picked a model, so it is
+        seeded with ``default_model_alias`` to satisfy the non-null model column.
+        """
+        pref = await self._session.get(UserPreference, user_id)
+        if pref is None:
+            pref = UserPreference(user_id=user_id, model_alias=default_model_alias)
+            self._session.add(pref)
+        pref.persona_alias = alias
+        pref.persona_custom = custom
         await self._session.flush()
 
 

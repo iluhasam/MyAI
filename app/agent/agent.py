@@ -14,6 +14,7 @@ from app.executor.executor import Executor
 from app.gateway.payload import AgentResponse, UnifiedPayload
 from app.llm.catalog import ModelCatalog
 from app.memory.memory import MemorySubsystem
+from app.persona import CUSTOM_ALIAS, MAX_CUSTOM_LEN, PersonaCatalog
 from app.planner.planner import Planner
 
 _log = get_logger(__name__)
@@ -29,11 +30,13 @@ class Agent:
         executor: Executor,
         memory: MemorySubsystem,
         catalog: ModelCatalog,
+        personas: PersonaCatalog,
     ) -> None:
         self._planner = planner
         self._executor = executor
         self._memory = memory
         self._catalog = catalog
+        self._personas = personas
 
     async def process(self, payload: UnifiedPayload) -> AgentResponse:
         """Run one cognitive turn and return the reply."""
@@ -43,6 +46,10 @@ class Agent:
             return await self._list_models(payload)
         if payload.command == "model":
             return await self._select_model(payload)
+        if payload.command == "personas":
+            return await self._list_personas(payload)
+        if payload.command == "persona":
+            return await self._select_persona(payload)
         try:
             context = await self._memory.load(payload)
             plan = self._planner.plan(payload, context)
@@ -96,4 +103,50 @@ class Agent:
         return AgentResponse(
             text=f"Готово — теперь отвечаю через «{alias}».",
             metadata={"current_model": alias},
+        )
+
+    # -- persona-selection commands ----------------------------------------
+    async def _list_personas(self, payload: UnifiedPayload) -> AgentResponse:
+        """`/personas` — show the persona catalog and mark the current choice."""
+        current = await self._memory.get_persona_alias(payload)
+        lines = ["Стили общения (выбрать: /persona <название>):"]
+        for p in self._personas.list():
+            mark = " ← сейчас" if p.alias == current else ""
+            lines.append(f"• {p.alias} — {p.label}{mark}")
+        lines.append(f"• {CUSTOM_ALIAS} <текст> — свой стиль" + (" ← сейчас" if current == CUSTOM_ALIAS else ""))
+        return AgentResponse(text="\n".join(lines), metadata={"current_persona": current})
+
+    async def _select_persona(self, payload: UnifiedPayload) -> AgentResponse:
+        """`/persona <alias>` or `/persona свой <текст>` — set the communication style."""
+        parts = payload.text.split()
+        alias = parts[1] if len(parts) >= 2 else ""
+        if not alias:
+            current = await self._memory.get_persona_alias(payload)
+            return AgentResponse(
+                text=(
+                    f"Сейчас стиль: {current}. Сменить — /persona <название>, "
+                    "свой стиль — /persona свой <текст>, список — /personas."
+                )
+            )
+        if alias == CUSTOM_ALIAS:
+            custom = payload.text.split(maxsplit=2)[2].strip() if len(parts) >= 3 else ""
+            if not custom:
+                return AgentResponse(
+                    text="Опиши свой стиль после команды, например: /persona свой Ты — саркастичный кот."
+                )
+            custom = custom[:MAX_CUSTOM_LEN]
+            await self._memory.set_persona(payload, alias=None, custom=custom)
+            return AgentResponse(
+                text="Готово — теперь общаюсь в твоём стиле.",
+                metadata={"current_persona": CUSTOM_ALIAS},
+            )
+        if not self._personas.has(alias):
+            valid = ", ".join(p.alias for p in self._personas.list())
+            return AgentResponse(
+                text=f"Неизвестный стиль «{alias}». Доступные: {valid}, или {CUSTOM_ALIAS} <текст>. Список — /personas."
+            )
+        await self._memory.set_persona(payload, alias=alias, custom=None)
+        return AgentResponse(
+            text=f"Готово — теперь общаюсь в стиле «{alias}».",
+            metadata={"current_persona": alias},
         )

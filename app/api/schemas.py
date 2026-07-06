@@ -73,3 +73,17 @@ class ModelsResponse(BaseModel):
 
     default: str
     models: list[ModelOut]
+
+
+class PersonaOut(BaseModel):
+    """One selectable communication style."""
+
+    alias: str
+    label: str
+
+
+class PersonasResponse(BaseModel):
+    """The catalog of personas a user may switch between via ``/persona <alias>``."""
+
+    default: str
+    personas: list[PersonaOut]

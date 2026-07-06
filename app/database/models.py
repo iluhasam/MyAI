@@ -66,6 +66,9 @@ class UserPreference(Base):
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     model_alias: Mapped[str] = mapped_column(String(64))
+    # Communication style: a catalog alias, or "свой" with free text in persona_custom.
+    persona_alias: Mapped[str | None] = mapped_column(String(64), default=None)
+    persona_custom: Mapped[str | None] = mapped_column(Text, default=None)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )

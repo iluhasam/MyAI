@@ -27,6 +27,7 @@ from app.llm.base import ChatMessage, LLMClient, Role
 from app.llm.catalog import ModelCatalog
 from app.memory.semantic import SemanticMemory
 from app.memory.session import SessionMemory
+from app.persona import PersonaCatalog
 
 _log = get_logger(__name__)
 
@@ -41,6 +42,8 @@ class MemoryContext:
     semantic_snippets: list[str] = field(default_factory=list)
     model_alias: str = ""  # user's selected model alias (or catalog default)
     model: str = ""  # resolved provider model string passed to the LLM client
+    persona_alias: str = ""  # user's selected persona (or "свой" for custom)
+    persona_prompt: str = ""  # resolved style instruction ("" = neutral default)
 
 
 class MemorySubsystem:
@@ -52,12 +55,14 @@ class MemorySubsystem:
         database: Database,
         llm: LLMClient,
         catalog: ModelCatalog,
+        personas: PersonaCatalog,
         session_window: int = 30,
     ) -> None:
         self._db = database
         self._session = SessionMemory(window=session_window)
         self._semantic = SemanticMemory(llm)
         self._catalog = catalog
+        self._personas = personas
 
     @staticmethod
     def user_key(payload: UnifiedPayload) -> str:
@@ -74,10 +79,15 @@ class MemorySubsystem:
                 display_name=payload.display_name,
             )
             user_id = user.id
-            stored_alias = await PreferenceRepository(session).get_model_alias(user_id)
+            prefs = PreferenceRepository(session)
+            stored_alias = await prefs.get_model_alias(user_id)
+            stored_persona_alias, stored_persona_custom = await prefs.get_persona(user_id)
 
         model_alias = self._catalog.alias_or_default(stored_alias)
         model = self._catalog.resolve(model_alias)
+        persona_alias, persona_prompt = self._resolve_persona(
+            stored_persona_alias, stored_persona_custom
+        )
 
         recent = self._session.history(key)
         if not recent:
@@ -96,7 +106,20 @@ class MemorySubsystem:
             semantic_snippets=snippets,
             model_alias=model_alias,
             model=model,
+            persona_alias=persona_alias,
+            persona_prompt=persona_prompt,
         )
+
+    def _resolve_persona(
+        self, stored_alias: str | None, stored_custom: str | None
+    ) -> tuple[str, str]:
+        """Return ``(display_alias, style_prompt)`` from stored persona fields."""
+        from app.persona import CUSTOM_ALIAS
+
+        if stored_custom:
+            return CUSTOM_ALIAS, stored_custom
+        alias = self._personas.alias_or_default(stored_alias)
+        return alias, self._personas.resolve(alias)
 
     async def get_preferred_alias(self, payload: UnifiedPayload) -> str:
         """Return the user's current model alias (or the catalog default)."""
@@ -118,6 +141,35 @@ class MemorySubsystem:
                 display_name=payload.display_name,
             )
             await PreferenceRepository(session).set_model_alias(user.id, alias)
+
+    async def get_persona_alias(self, payload: UnifiedPayload) -> str:
+        """Return the user's current persona display alias (or 'свой'/default)."""
+        async with self._db.session() as session:
+            user = await UserRepository(session).get_or_create(
+                channel=payload.channel,
+                external_id=payload.external_user_id,
+                display_name=payload.display_name,
+            )
+            stored_alias, stored_custom = await PreferenceRepository(session).get_persona(user.id)
+        alias, _ = self._resolve_persona(stored_alias, stored_custom)
+        return alias
+
+    async def set_persona(
+        self, payload: UnifiedPayload, *, alias: str | None, custom: str | None
+    ) -> None:
+        """Persist the user's persona: either a catalog alias or free-text custom."""
+        async with self._db.session() as session:
+            user = await UserRepository(session).get_or_create(
+                channel=payload.channel,
+                external_id=payload.external_user_id,
+                display_name=payload.display_name,
+            )
+            await PreferenceRepository(session).set_persona(
+                user.id,
+                alias=alias,
+                custom=custom,
+                default_model_alias=self._catalog.default_alias,
+            )
 
     async def record_turn(
         self, ctx: MemoryContext, *, user_text: str, assistant_text: str, channel: str

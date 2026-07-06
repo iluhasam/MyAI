@@ -78,6 +78,13 @@ class Executor:
     ) -> list[ChatMessage]:
         messages: list[ChatMessage] = [ChatMessage(role=Role.SYSTEM, content=_SYSTEM_PROMPT)]
 
+        # Persona shapes *style* only; placed after the base rules so it can never
+        # override the safety instructions above it.
+        if context.persona_prompt:
+            messages.append(
+                ChatMessage(role=Role.SYSTEM, content="Стиль общения: " + context.persona_prompt)
+            )
+
         specs = self._tools.specs()
         if specs:
             messages.append(

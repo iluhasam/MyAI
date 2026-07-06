@@ -21,6 +21,8 @@ from app.api.schemas import (
     ModelOut,
     ModelsResponse,
     OutboxCounts,
+    PersonaOut,
+    PersonasResponse,
 )
 from app.core.container import Container
 from app.core.lifecycle import shutdown, startup
@@ -77,6 +79,15 @@ def create_api(container: Container) -> FastAPI:
         return ModelsResponse(
             default=catalog.default_alias,
             models=[ModelOut(alias=m.alias, label=m.label) for m in catalog.list()],
+        )
+
+    @app.get("/personas", response_model=PersonasResponse, tags=["chat"])
+    async def personas() -> PersonasResponse:
+        """List communication styles. Users switch with `/persona <alias>`."""
+        cat = container.personas
+        return PersonasResponse(
+            default=cat.default_alias,
+            personas=[PersonaOut(alias=p.alias, label=p.label) for p in cat.list()],
         )
 
     @app.post("/chat", response_model=ChatResponse, tags=["chat"])

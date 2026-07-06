@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # dedicated model; empty falls back to the chat model (fine for the mock).
     llm_embedding_model: str = Field(default="", alias="LLM_EMBEDDING_MODEL")
 
+    # --- Persona (communication style) ---
+    default_persona: str = Field(default="обычный", alias="DEFAULT_PERSONA")
+
     # --- Memory ---
     memory_session_window: int = Field(default=30, ge=1, le=200, alias="MEMORY_SESSION_WINDOW")
 
