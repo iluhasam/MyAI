@@ -6,6 +6,9 @@ pydantic-settings>=2.2,<3.0
 SQLAlchemy[asyncio]>=2.0.29,<2.1
 aiosqlite>=0.20.0
 
+# --- Web search tool (free, keyless, via DuckDuckGo) ---
+ddgs>=6.0
+
 # --- Optional transport (Telegram). The bot layer is framework-agnostic;
 #     install aiogram only if you actually run the Telegram adapter. ---
 # aiogram>=3.4,<4.0

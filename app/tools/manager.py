@@ -15,6 +15,7 @@ from app.core.logger import get_logger
 from app.llm.base import LLMClient
 from app.tools.base import Tool, ToolResult
 from app.tools.calculator import CalculatorTool
+from app.tools.websearch import WebSearchTool
 
 _log = get_logger(__name__)
 
@@ -36,7 +37,8 @@ class ToolManager:
     def register_defaults(self, *, llm: LLMClient | None = None) -> None:
         """Register the built-in tool set shipped with the MVP."""
         self.register(CalculatorTool())
-        # Future built-ins (Vision/OCR/Search/Parser) register here as they land,
+        self.register(WebSearchTool())
+        # Future built-ins (Vision/OCR/Parser) register here as they land,
         # optionally using the provided llm client.
 
     def has(self, name: str) -> bool:

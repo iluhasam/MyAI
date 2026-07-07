@@ -20,6 +20,15 @@ from app.memory.memory import MemoryContext
 _ARITHMETIC = re.compile(r"^[\s\d.()+\-*/%^]+$")
 _HAS_OP = re.compile(r"[+\-*/%^]")
 
+# Heuristic intent for a web lookup: explicit search verbs, "where to get" phrases,
+# recency words, or a raw URL. A model-driven planner would decide this itself.
+_SEARCH_INTENT = re.compile(
+    r"ссылк|найд[иё]|поищ|загугл|погугл|гугл|в интернете|в сети|источник|"
+    r"где (?:взять|скачать|найти|можно|посмотреть|купить)|"
+    r"актуальн|свеж|последн|новост|что нового|https?://",
+    re.IGNORECASE,
+)
+
 
 @dataclass(slots=True, frozen=True)
 class PlanStep:
@@ -59,12 +68,19 @@ class Planner:
                     description="Вычислить арифметическое выражение из запроса.",
                 )
             )
+            rationale = "Арифметическое выражение — вычисляем инструментом, затем синтез ответа."
+        elif text and _SEARCH_INTENT.search(text):
+            steps.append(
+                PlanStep(
+                    tool="web_search",
+                    arguments={"query": text},
+                    description="Поиск в интернете для актуальной информации и ссылок.",
+                )
+            )
+            rationale = "Запрос требует свежих данных/ссылок — ищем в интернете, затем синтез ответа."
+        else:
+            rationale = "Инструменты не требуются — прямой ответ модели с учётом контекста памяти."
 
-        rationale = (
-            "Обнаружено арифметическое выражение — вычисляем инструментом, затем синтез ответа."
-            if steps
-            else "Инструменты не требуются — прямой ответ модели с учётом контекста памяти."
-        )
         return ExecutionPlan(steps=steps, synthesise_with_llm=True, rationale=rationale)
 
     @staticmethod
