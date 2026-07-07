@@ -22,6 +22,7 @@ class Persona:
     alias: str
     label: str   # shown by /personas
     prompt: str  # style instruction injected into the system prompt ("" = neutral)
+    model: str | None = None  # model alias auto-selected with this persona (optional)
 
 
 # Curated default personas. The default ("обычный") adds no extra styling on top
@@ -33,6 +34,7 @@ _DEFAULT_PERSONAS: tuple[Persona, ...] = (
         "Философ — глубокие рассуждения",
         "Общайся как философ: рассуждай вдумчиво и глубоко, рассматривай разные "
         "точки зрения, задавай наводящие вопросы, не спеши с однозначными выводами.",
+        model="deepseek",
     ),
     Persona(
         "психолог",
@@ -74,6 +76,7 @@ _DEFAULT_PERSONAS: tuple[Persona, ...] = (
         "Красные линии (за них не заходить даже в образе): без реальных угроз насилия и без "
         "оскорблений по национальности, расе, полу, религии, ориентации или инвалидности — "
         "это не дерзко, а мерзко. Всё остальное — можно жёстко.",
+        model="deepseek",
     ),
 )
 
@@ -104,6 +107,9 @@ class PersonaCatalog:
 
     def has(self, alias: str) -> bool:
         return alias in self._by_alias
+
+    def get(self, alias: str) -> Persona | None:
+        return self._by_alias.get(alias)
 
     def resolve(self, alias: str | None) -> str:
         """Return the style prompt for ``alias`` (or the default's)."""

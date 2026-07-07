@@ -82,6 +82,23 @@ async def test_custom_persona_applied(container):
 
 
 @pytest.mark.asyncio
+async def test_persona_can_auto_select_model(container):
+    """Selecting 'хам'/'философ' also switches the model to their recommended one."""
+    cli = CLIAdapter(container.gateway, user_id="auto")
+    reply = await cli.send("/persona хам")
+    assert "deepseek" in reply
+    assert "deepseek" in await cli.send("/status")
+
+
+@pytest.mark.asyncio
+async def test_persona_without_recommended_model_keeps_model(container):
+    cli = CLIAdapter(container.gateway, user_id="keepmodel")
+    await cli.send("/model gpt-4o")
+    await cli.send("/persona программист")  # no recommended model
+    assert "gpt-4o" in await cli.send("/status")
+
+
+@pytest.mark.asyncio
 async def test_persona_is_per_user(container):
     await CLIAdapter(container.gateway, user_id="alice").send("/persona психолог")
     await CLIAdapter(container.gateway, user_id="bob").send("/persona программист")
@@ -94,12 +111,12 @@ async def test_persona_is_per_user(container):
 
 @pytest.mark.asyncio
 async def test_persona_and_model_are_independent(container):
-    """Setting a persona keeps the model choice, and vice versa."""
+    """A persona without a recommended model keeps the model choice, and vice versa."""
     cli = CLIAdapter(container.gateway, user_id="combo")
     await cli.send("/model claude")
-    await cli.send("/persona философ")
+    await cli.send("/persona программист")  # no recommended model -> model untouched
 
     models = await cli.send("/models")
     personas = await cli.send("/personas")
     assert "← сейчас" in models.split("claude")[1].split("\n")[0]
-    assert "← сейчас" in personas.split("философ")[1].split("\n")[0]
+    assert "← сейчас" in personas.split("программист")[1].split("\n")[0]

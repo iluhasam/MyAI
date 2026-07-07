@@ -12,10 +12,10 @@ from app.database.repositories import DialogRepository, UserRepository
 async def test_status_shows_model_and_persona(container):
     cli = CLIAdapter(container.gateway, user_id="st")
     await cli.send("/model claude")
-    await cli.send("/persona философ")
+    await cli.send("/persona программист")  # no recommended model -> keeps claude
 
     reply = await cli.send("/status")
-    assert "claude" in reply and "философ" in reply
+    assert "claude" in reply and "программист" in reply
 
 
 @pytest.mark.asyncio
