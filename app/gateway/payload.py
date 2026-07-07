@@ -56,9 +56,25 @@ class UnifiedPayload(BaseModel):
     raw_text: str = ""
 
 
+class Button(BaseModel):
+    """A channel-agnostic actionable choice.
+
+    Transports render it however they can — Telegram as an inline-keyboard button,
+    CLI/REST may ignore it. Activating a button re-enters the pipeline as the
+    command ``/{action}`` (so button clicks reuse the exact command handlers).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    label: str
+    action: str  # e.g. "model claude" -> runs "/model claude" when clicked
+
+
 class AgentResponse(BaseModel):
     """Normalised outbound reply the transport renders back to the user."""
 
     text: str
     attachments: tuple[Attachment, ...] = ()
     metadata: dict[str, str] = Field(default_factory=dict)
+    # Rows of buttons (each inner tuple is a keyboard row). Empty = no buttons.
+    buttons: tuple[tuple[Button, ...], ...] = ()

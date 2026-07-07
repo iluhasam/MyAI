@@ -41,7 +41,46 @@ class TelegramAdapter:
         @self._dp.message()
         async def _on_message(message: "types.Message") -> None:
             reply = await self._gateway.handle(self._to_raw(message))
-            await message.answer(reply.text)
+            await message.answer(reply.text, reply_markup=self._keyboard(reply))
+
+        @self._dp.callback_query()
+        async def _on_callback(callback: "types.CallbackQuery") -> None:
+            # A button press re-enters the pipeline as the command "/{action}",
+            # reusing every command handler; then we edit the message in place.
+            reply = await self._gateway.handle(self._callback_raw(callback))
+            kb = self._keyboard(reply)
+            try:
+                await callback.message.edit_text(reply.text, reply_markup=kb)
+            except Exception:  # e.g. "message is not modified" / too old
+                await callback.message.answer(reply.text, reply_markup=kb)
+            await callback.answer()
+
+    def _keyboard(self, response: Any):  # pragma: no cover - requires aiogram runtime
+        """Render an AgentResponse's buttons as a Telegram inline keyboard."""
+        if not response.buttons:
+            return None
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=b.label, callback_data=b.action) for b in row]
+                for row in response.buttons
+            ]
+        )
+
+    @staticmethod
+    def _callback_raw(callback: Any) -> RawInbound:
+        data = callback.data or ""
+        user = callback.from_user
+        return {
+            "channel": "telegram",
+            "external_user_id": str(user.id),
+            "message_type": "command",
+            "text": "/" + data,
+            "command": data.split()[0] if data else "",
+            "display_name": user.full_name,
+            "language": user.language_code or "ru",
+        }
 
     @staticmethod
     def _to_raw(message: Any) -> RawInbound:
@@ -84,6 +123,7 @@ class TelegramAdapter:
 
         await self._bot.set_my_commands(
             [
+                BotCommand(command="menu", description="Меню настроек (кнопки)"),
                 BotCommand(command="status", description="Текущая модель и стиль"),
                 BotCommand(command="models", description="Список моделей"),
                 BotCommand(command="model", description="Выбрать модель: /model <название>"),

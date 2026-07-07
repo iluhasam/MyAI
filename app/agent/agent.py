@@ -12,7 +12,7 @@ from app.core.exceptions import PlatformError
 from app.core.logger import get_logger
 from app.core.ratelimit import RateLimiter
 from app.executor.executor import Executor
-from app.gateway.payload import AgentResponse, UnifiedPayload
+from app.gateway.payload import AgentResponse, Button, UnifiedPayload
 from app.llm.catalog import ModelCatalog
 from app.memory.memory import MemorySubsystem
 from app.persona import CUSTOM_ALIAS, MAX_CUSTOM_LEN, PersonaCatalog
@@ -58,6 +58,8 @@ class Agent:
             return await self._list_personas(payload)
         if payload.command == "persona":
             return await self._select_persona(payload)
+        if payload.command in {"menu", "start"}:
+            return self._menu()
         if payload.command == "status":
             return await self._status(payload)
         if payload.command == "reset":
@@ -95,11 +97,19 @@ class Agent:
     async def _list_models(self, payload: UnifiedPayload) -> AgentResponse:
         """`/models` — show the catalog and mark the user's current choice."""
         current = await self._memory.get_preferred_alias(payload)
-        lines = ["Доступные модели (выбрать: /model <название>):"]
+        lines = ["Доступные модели — нажми кнопку или введи /model <название>:"]
         for info in self._catalog.list():
             mark = " ← сейчас" if info.alias == current else ""
             lines.append(f"• {info.alias} — {info.label}{mark}")
-        return AgentResponse(text="\n".join(lines), metadata={"current_model": current})
+        items = [
+            (("✅ " if info.alias == current else "") + info.alias, f"model {info.alias}")
+            for info in self._catalog.list()
+        ]
+        return AgentResponse(
+            text="\n".join(lines),
+            metadata={"current_model": current},
+            buttons=self._grid(items),
+        )
 
     async def _select_model(self, payload: UnifiedPayload) -> AgentResponse:
         """`/model <alias>` — validate and persist the user's model choice."""
@@ -120,9 +130,40 @@ class Agent:
             )
         await self._memory.set_preferred_model(payload, alias)
         return AgentResponse(
-            text=f"Готово — теперь отвечаю через «{alias}».",
+            text=f"Готово — теперь отвечаю через «{alias}». 🧠",
             metadata={"current_model": alias},
+            buttons=self._BACK,
         )
+
+    # -- menu / buttons ----------------------------------------------------
+    _BACK = ((Button(label="⬅️ Меню", action="menu"),),)
+
+    def _menu(self) -> AgentResponse:
+        """`/menu` (and `/start`) — the button hub for settings."""
+        return AgentResponse(
+            text="Что настроим? 👇",
+            buttons=(
+                (Button(label="🧠 Модель", action="models"),
+                 Button(label="🎭 Стиль", action="personas")),
+                (Button(label="📊 Статус", action="status"),
+                 Button(label="🧹 Сброс", action="reset")),
+            ),
+        )
+
+    @staticmethod
+    def _grid(items: list[tuple[str, str]], *, per_row: int = 2) -> tuple[tuple[Button, ...], ...]:
+        """Lay out (label, action) pairs into keyboard rows, then a Back row."""
+        rows: list[tuple[Button, ...]] = []
+        row: list[Button] = []
+        for label, action in items:
+            row.append(Button(label=label, action=action))
+            if len(row) == per_row:
+                rows.append(tuple(row))
+                row = []
+        if row:
+            rows.append(tuple(row))
+        rows.append((Button(label="⬅️ Меню", action="menu"),))
+        return tuple(rows)
 
     # -- status / reset ----------------------------------------------------
     async def _status(self, payload: UnifiedPayload) -> AgentResponse:
@@ -132,18 +173,22 @@ class Agent:
         return AgentResponse(
             text=(
                 f"Текущие настройки:\n"
-                f"• Модель: {model}  (сменить — /model, список — /models)\n"
-                f"• Стиль: {persona}  (сменить — /persona, список — /personas)"
+                f"• 🧠 Модель: {model}\n"
+                f"• 🎭 Стиль: {persona}"
             ),
             metadata={"current_model": model, "current_persona": persona},
+            buttons=(
+                (Button(label="🧠 Сменить модель", action="models"),
+                 Button(label="🎭 Сменить стиль", action="personas")),
+            ),
         )
 
     async def _reset(self, payload: UnifiedPayload) -> AgentResponse:
         """`/reset` — forget the conversation (settings are kept)."""
         await self._memory.reset(payload)
         return AgentResponse(
-            text="История разговора очищена — начинаем с чистого листа. "
-            "Выбранные модель и стиль сохранены."
+            text="Готово, начинаем с чистого листа. 🧹 Модель и стиль сохранены.",
+            buttons=self._BACK,
         )
 
     # -- persona-selection commands ----------------------------------------
@@ -155,7 +200,15 @@ class Agent:
             mark = " ← сейчас" if p.alias == current else ""
             lines.append(f"• {p.alias} — {p.label}{mark}")
         lines.append(f"• {CUSTOM_ALIAS} <текст> — свой стиль" + (" ← сейчас" if current == CUSTOM_ALIAS else ""))
-        return AgentResponse(text="\n".join(lines), metadata={"current_persona": current})
+        items = [
+            (("✅ " if p.alias == current else "") + p.alias, f"persona {p.alias}")
+            for p in self._personas.list()
+        ]
+        return AgentResponse(
+            text="\n".join(lines),
+            metadata={"current_persona": current},
+            buttons=self._grid(items),
+        )
 
     async def _select_persona(self, payload: UnifiedPayload) -> AgentResponse:
         """`/persona <alias>` or `/persona свой <текст>` — set the communication style."""
@@ -178,8 +231,9 @@ class Agent:
             custom = custom[:MAX_CUSTOM_LEN]
             await self._memory.set_persona(payload, alias=None, custom=custom)
             return AgentResponse(
-                text="Готово — теперь общаюсь в твоём стиле.",
+                text="Готово — теперь общаюсь в твоём стиле. 🎭",
                 metadata={"current_persona": CUSTOM_ALIAS},
+                buttons=self._BACK,
             )
         if not self._personas.has(alias):
             valid = ", ".join(p.alias for p in self._personas.list())
@@ -188,6 +242,7 @@ class Agent:
             )
         await self._memory.set_persona(payload, alias=alias, custom=None)
         return AgentResponse(
-            text=f"Готово — теперь общаюсь в стиле «{alias}».",
+            text=f"Готово — теперь общаюсь в стиле «{alias}». 🎭",
             metadata={"current_persona": alias},
+            buttons=self._BACK,
         )

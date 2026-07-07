@@ -49,18 +49,20 @@ class Router:
     # -- pipelines ----------------------------------------------------------
     async def _handle_command(self, payload: UnifiedPayload) -> AgentResponse:
         """Handle built-in slash commands; unknown commands go to the agent."""
-        if payload.command in {"start", "help"}:
+        if payload.command == "help":
             return AgentResponse(
                 text=(
                     "Привет! Я персональный ИИ-агент. Напиши сообщение — и я отвечу.\n\n"
-                    "Команды:\n"
+                    "Удобнее всего управлять кнопками — открой /menu. Команды:\n"
+                    "• /menu — меню настроек (кнопки)\n"
                     "• /status — текущая модель и стиль\n"
                     "• /models, /model <название> — выбрать модель\n"
                     "• /personas, /persona <название> — выбрать стиль общения\n"
-                    "• /reset — очистить историю разговора\n\n"
-                    "Медиа (фото, голос, документы) появятся в следующих итерациях."
+                    "• /reset — очистить историю разговора"
                 )
             )
+        # Everything else (start, menu, status, reset, model, persona, …) is
+        # handled by the Agent, which also renders inline buttons.
         return await self._agent.process(payload)
 
     async def _fallback(self, payload: UnifiedPayload) -> AgentResponse:

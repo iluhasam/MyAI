@@ -36,7 +36,7 @@ async def test_reset_clears_history_but_keeps_settings(container):
         assert await DialogRepository(session).recent(user_id=user.id, limit=10)
 
     reply = await cli.send("/reset")
-    assert "очищена" in reply.lower()
+    assert "чистого листа" in reply.lower()
 
     # Dialog history is gone...
     async with container.database.session() as session:
