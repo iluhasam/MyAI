@@ -8,6 +8,7 @@ rest of the platform runs without it installed.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from app.core.exceptions import ConfigurationError
@@ -15,6 +16,16 @@ from app.core.logger import get_logger
 from app.gateway.gateway import Gateway, RawInbound
 
 _log = get_logger(__name__)
+
+# Rotating "thinking" frames shown (with the native typing action) while the
+# cognitive core works, so the user sees the bot is alive and busy.
+_THINK_FRAMES = (
+    "🧠 Думаю…",
+    "⚙️ Соображаю…",
+    "💭 Прикидываю…",
+    "✍️ Формулирую ответ…",
+)
+_ANIM_INTERVAL = 1.3  # seconds between frames (safe vs Telegram edit limits)
 
 
 class TelegramAdapter:
@@ -40,8 +51,27 @@ class TelegramAdapter:
 
         @self._dp.message()
         async def _on_message(message: "types.Message") -> None:
-            reply = await self._gateway.handle(self._to_raw(message))
-            await message.answer(reply.text, reply_markup=self._keyboard(reply))
+            raw = self._to_raw(message)
+            # Commands are instant — no need for a thinking animation.
+            if (message.text or "").startswith("/"):
+                reply = await self._gateway.handle(raw)
+                await message.answer(reply.text, reply_markup=self._keyboard(reply))
+                return
+
+            # LLM turn: show an animated placeholder + typing action while working,
+            # then morph the placeholder into the final answer.
+            placeholder = await message.answer(_THINK_FRAMES[0])
+            anim = asyncio.create_task(self._animate(message.chat.id, placeholder))
+            try:
+                reply = await self._gateway.handle(raw)
+            finally:
+                anim.cancel()
+                await asyncio.gather(anim, return_exceptions=True)  # ensure it stopped
+            kb = self._keyboard(reply)
+            try:
+                await placeholder.edit_text(reply.text, reply_markup=kb)
+            except Exception:  # answer too long / not editable -> send fresh
+                await message.answer(reply.text, reply_markup=kb)
 
         @self._dp.callback_query()
         async def _on_callback(callback: "types.CallbackQuery") -> None:
@@ -54,6 +84,24 @@ class TelegramAdapter:
             except Exception:  # e.g. "message is not modified" / too old
                 await callback.message.answer(reply.text, reply_markup=kb)
             await callback.answer()
+
+    async def _animate(self, chat_id: int, placeholder: Any) -> None:  # pragma: no cover - aiogram runtime
+        """Cycle the placeholder through 'thinking' frames + keep 'typing…' alive."""
+        i = 1
+        try:
+            while True:
+                try:
+                    await self._bot.send_chat_action(chat_id, action="typing")
+                except Exception:  # network hiccup — keep animating
+                    pass
+                await asyncio.sleep(_ANIM_INTERVAL)
+                try:
+                    await placeholder.edit_text(_THINK_FRAMES[i % len(_THINK_FRAMES)])
+                except Exception:  # flood control / not modified — ignore
+                    pass
+                i += 1
+        except asyncio.CancelledError:  # response is ready; stop cleanly
+            pass
 
     def _keyboard(self, response: Any):  # pragma: no cover - requires aiogram runtime
         """Render an AgentResponse's buttons as a Telegram inline keyboard."""
