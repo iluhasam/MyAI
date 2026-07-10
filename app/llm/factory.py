@@ -24,12 +24,6 @@ def build_llm_client(settings: Settings) -> LLMClient:
     the value passed here is only the fallback default.
     """
     provider = settings.llm_provider.lower()
-    # Convenience: if an OpenRouter key is present but LLM_PROVIDER was left at the
-    # default 'mock', use OpenRouter automatically (a common deploy misconfiguration
-    # that otherwise silently serves the echo mock).
-    if provider == "mock" and settings.openrouter_api_key:
-        _log.info("OPENROUTER_API_KEY is set but LLM_PROVIDER=mock — using OpenRouter")
-        provider = "openrouter"
     if provider == "mock":
         _log.info("using MockLLMClient (deterministic, offline)")
         return MockLLMClient()
