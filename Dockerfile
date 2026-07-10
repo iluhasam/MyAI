@@ -33,6 +33,8 @@ USER appuser
 
 EXPOSE 8000
 
-# Default mode is the REST API (needs no secrets). Override for Telegram, e.g.
-#   docker run ... python -m app.main telegram
-CMD ["python", "-m", "app.main", "api"]
+# Transport is chosen by APP_MODE (api | telegram | cli), so hosts that use the
+# Dockerfile directly (Railway, Fly, plain `docker run`) just set that env var.
+# `exec` makes python PID 1 so SIGTERM reaches it for a graceful shutdown.
+# Default is telegram — the common case for a hosted bot.
+CMD ["sh", "-c", "exec python -m app.main \"${APP_MODE:-telegram}\""]

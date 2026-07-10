@@ -157,6 +157,20 @@ docker compose up --build
 - `restart: unless-stopped` — контейнер сам поднимается после перезагрузки/сбоя.
 - Образ работает от непривилегированного пользователя (`appuser`).
 
+### Хостинг (Railway/Fly/любой Docker-хост)
+
+Хост собирает образ из `Dockerfile` (не из compose) и запускает `CMD`, который уважает
+`APP_MODE` (по умолчанию `telegram`). Что задать в переменных окружения хоста:
+
+- `TELEGRAM_BOT_TOKEN`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` — секреты (в git их нет).
+- `APP_MODE=telegram` (для бота; long-polling, порт не нужен), `APP_ENV=prod`.
+
+⚠️ Важно:
+- **SQLite на таких хостах эфемерна** — `data/agent.db` сбрасывается при каждом деплое.
+  Для сохранности подключи volume на `/app/data` или перейди на PostgreSQL.
+- **Не запускай бота в двух местах одновременно** (локально и на хосте) — Telegram
+  разрешает только один long-polling на токен, иначе конфликт 409.
+
 ## Тесты
 
 ```bash
