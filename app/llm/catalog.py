@@ -33,7 +33,8 @@ _DEFAULT_MODELS: tuple[ModelInfo, ...] = (
     ModelInfo("claude", "openrouter/anthropic/claude-sonnet-4", "Anthropic Claude Sonnet 4"),
     ModelInfo("gemini", "gemini/gemini-2.5-flash", "Google Gemini 2.5 Flash — прямой Google, free tier"),
     ModelInfo("llama", "openrouter/meta-llama/llama-3.1-8b-instruct", "Meta Llama 3.1 8B — дешёвая"),
-    ModelInfo("deepseek", "openrouter/deepseek/deepseek-chat", "DeepSeek Chat — дешёвая, сильная"),
+    ModelInfo("deepseek", "openrouter/deepseek/deepseek-chat", "DeepSeek Chat — через OpenRouter"),
+    ModelInfo("deepseek-direct", "deepseek/deepseek-chat", "DeepSeek Chat — прямой API (нужен баланс)"),
 )
 
 

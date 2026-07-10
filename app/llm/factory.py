@@ -52,6 +52,8 @@ def build_llm_client(settings: Settings) -> LLMClient:
         os.environ["OPENROUTER_API_KEY"] = key
         if settings.gemini_api_key:
             os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
+        if settings.deepseek_api_key:
+            os.environ["DEEPSEEK_API_KEY"] = settings.deepseek_api_key
         catalog = ModelCatalog(default_alias=settings.default_model)
         fallback = catalog.resolve(catalog.default_alias)
         embedding_model = settings.llm_embedding_model or "openrouter/openai/text-embedding-3-small"
