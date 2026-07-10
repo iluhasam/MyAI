@@ -240,13 +240,10 @@ class Agent:
             return AgentResponse(
                 text=f"Неизвестный стиль «{alias}». Доступные: {valid}, или {CUSTOM_ALIAS} <текст>. Список — /personas."
             )
-        await self._memory.set_persona(payload, alias=alias, custom=None)
+        applied_model = await self._memory.apply_persona(payload, alias)
         text = f"Готово — теперь общаюсь в стиле «{alias}». 🎭"
         metadata = {"current_persona": alias}
-        # A persona may recommend a model that plays it best — apply it as default.
-        persona = self._personas.get(alias)
-        if persona and persona.model and self._catalog.has(persona.model):
-            await self._memory.set_preferred_model(payload, persona.model)
-            text += f"\nМодель переключил на «{persona.model}» — она лучше отыгрывает этот стиль."
-            metadata["current_model"] = persona.model
+        if applied_model:
+            text += f"\nМодель переключил на «{applied_model}» — она лучше отыгрывает этот стиль."
+            metadata["current_model"] = applied_model
         return AgentResponse(text=text, metadata=metadata, buttons=self._BACK)

@@ -171,6 +171,19 @@ class MemorySubsystem:
         alias, _ = self._resolve_persona(stored_alias, stored_custom)
         return alias
 
+    async def apply_persona(self, payload: UnifiedPayload, alias: str) -> str | None:
+        """Set a preset persona and, if it recommends a model, apply that too.
+
+        Shared by the bot commands and the Mini App so both behave identically.
+        Returns the model alias that was auto-selected, or ``None``.
+        """
+        await self.set_persona(payload, alias=alias, custom=None)
+        persona = self._personas.get(alias)
+        if persona and persona.model and self._catalog.has(persona.model):
+            await self.set_preferred_model(payload, persona.model)
+            return persona.model
+        return None
+
     async def set_persona(
         self, payload: UnifiedPayload, *, alias: str | None, custom: str | None
     ) -> None:

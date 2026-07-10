@@ -17,21 +17,22 @@ from app.gateway.gateway import Gateway, RawInbound
 
 _log = get_logger(__name__)
 
-# Rotating "thinking" frames shown (with the native typing action) while the
-# cognitive core works, so the user sees the bot is alive and busy.
+# Progress-dot frames shown (with the native typing action) while the cognitive
+# core works, so the user sees the bot is alive and busy.
 _THINK_FRAMES = (
-    "🧠 Думаю…",
-    "⚙️ Соображаю…",
-    "💭 Прикидываю…",
-    "✍️ Формулирую ответ…",
+    "Думаю ●○○○○",
+    "Думаю ●●○○○",
+    "Думаю ●●●○○",
+    "Думаю ●●●●○",
+    "Думаю ●●●●●",
 )
-_ANIM_INTERVAL = 1.3  # seconds between frames (safe vs Telegram edit limits)
+_ANIM_INTERVAL = 1.0  # seconds between frames (safe vs Telegram edit limits)
 
 
 class TelegramAdapter:
     """Bridges aiogram <-> Gateway. Instantiate only when running the bot."""
 
-    def __init__(self, gateway: Gateway, *, token: str) -> None:
+    def __init__(self, gateway: Gateway, *, token: str, miniapp_url: str = "") -> None:
         if not token:
             raise ConfigurationError("TELEGRAM_BOT_TOKEN is required to run the Telegram adapter")
         try:
@@ -44,6 +45,7 @@ class TelegramAdapter:
         self._gateway = gateway
         self._bot = Bot(token=token)
         self._dp = Dispatcher()
+        self._miniapp_url = miniapp_url
         self._register_handlers()
 
     def _register_handlers(self) -> None:  # pragma: no cover - requires aiogram runtime
@@ -182,8 +184,22 @@ class TelegramAdapter:
             ]
         )
 
+    async def _set_menu_button(self) -> None:  # pragma: no cover - requires aiogram runtime
+        """Point the bot's menu button at the Mini App (if a URL is configured)."""
+        if not self._miniapp_url:
+            return
+        from aiogram.types import MenuButtonWebApp, WebAppInfo
+
+        await self._bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text="⚙️ Настройки", web_app=WebAppInfo(url=self._miniapp_url)
+            )
+        )
+        _log.info("mini app menu button set", extra={"url": self._miniapp_url})
+
     async def run(self) -> None:  # pragma: no cover - requires network + token
         """Start long-polling. Blocks until cancelled."""
         _log.info("starting Telegram long-polling")
         await self._set_commands()
+        await self._set_menu_button()
         await self._dp.start_polling(self._bot)

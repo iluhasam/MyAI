@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     # --- REST API (optional transport) ---
     api_host: str = Field(default="127.0.0.1", alias="API_HOST")
     api_port: int = Field(default=8000, ge=1, le=65535, alias="API_PORT")
+    # Public HTTPS URL of the Mini App page (e.g. https://<app>.up.railway.app/app).
+    # When set, the bot registers it as its chat menu button.
+    miniapp_url: str = Field(default="", alias="MINIAPP_URL")
 
     @field_validator("app_log_level")
     @classmethod

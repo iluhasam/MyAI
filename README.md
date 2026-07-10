@@ -171,6 +171,22 @@ docker compose up --build
 - **Не запускай бота в двух местах одновременно** (локально и на хосте) — Telegram
   разрешает только один long-polling на токен, иначе конфликт 409.
 
+## Mini App (настройки внутри Telegram)
+
+Веб-страница настроек, открывается **внутри** Telegram по кнопке меню бота — модель и
+стиль выбираются кнопками, чат остаётся чистым. Чтобы бот и Mini App видели одну базу,
+их запускают в одном процессе: `APP_MODE=all` (бот + веб + Mini App).
+
+- Страница: `GET /app` (Telegram WebApp SDK).
+- API (авторизация по подписи `initData`, заголовок `Authorization: tma <initData>`):
+  `GET /miniapp/state`, `POST /miniapp/{model,persona,reset}` — см. [app/api/app.py](app/api/app.py),
+  проверка подписи в [app/api/telegram_auth.py](app/api/telegram_auth.py).
+- Кнопка меню на Mini App ставится автоматически, если задан `MINIAPP_URL`.
+
+Хостинг (Railway): `APP_MODE=all`, `MINIAPP_URL=https://<app>.up.railway.app/app`. Порт и
+`0.0.0.0` подхватываются из `PORT` автоматически. Для сохранности данных — volume на
+`/app/data` или PostgreSQL.
+
 ## Тесты
 
 ```bash

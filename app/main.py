@@ -13,6 +13,7 @@ SIGTERM/SIGINT.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 
 from app.core.container import Container
@@ -20,6 +21,18 @@ from app.core.lifecycle import install_signal_handlers, lifespan
 from app.core.logger import get_logger
 
 _log = get_logger(__name__)
+
+
+def _web_host_port(settings) -> tuple[str, int]:
+    """Resolve the web bind address, honoring a host-injected PORT (Railway/Fly).
+
+    When a ``PORT`` env var is present the platform expects us to listen on it and
+    on all interfaces, so the public URL routes to us without extra config.
+    """
+    env_port = os.environ.get("PORT")
+    if env_port and env_port.isdigit():
+        return "0.0.0.0", int(env_port)
+    return settings.api_host, settings.api_port
 
 
 def _force_utf8_console() -> None:
@@ -60,12 +73,39 @@ def _run_api() -> None:  # pragma: no cover - exercised via live server, not uni
 
     container = Container()
     app = create_api(container)
+    host, port = _web_host_port(container.settings)
     uvicorn.run(
         app,
-        host=container.settings.api_host,
-        port=container.settings.api_port,
+        host=host,
+        port=port,
         log_config=None,  # reuse our structured logging, don't override it
     )
+
+
+async def _run_all() -> None:  # pragma: no cover - exercised as a live process
+    """Run the Telegram bot and the REST API (with the Mini App) in one process.
+
+    One container, one lifecycle (DB/outbox), one SQLite file — so settings
+    changed in the Mini App are immediately visible to the bot. This is the mode
+    to deploy when the Mini App is enabled.
+    """
+    import uvicorn
+
+    from app.api.app import create_api
+    from app.bot.telegram import TelegramAdapter
+
+    container = Container()
+    async with lifespan(container):
+        app = create_api(container, manage_lifecycle=False)  # lifecycle owned here
+        host, port = _web_host_port(container.settings)
+        config = uvicorn.Config(app, host=host, port=port, log_config=None)
+        server = uvicorn.Server(config)
+        adapter = TelegramAdapter(
+            container.gateway,
+            token=container.settings.telegram_bot_token,
+            miniapp_url=container.settings.miniapp_url,
+        )
+        await asyncio.gather(server.serve(), adapter.run())
 
 
 def main() -> None:
@@ -73,6 +113,12 @@ def main() -> None:
     transport = sys.argv[1] if len(sys.argv) > 1 else "cli"
     if transport == "api":
         _run_api()
+        return
+    if transport == "all":
+        try:
+            asyncio.run(_run_all())
+        except KeyboardInterrupt:  # pragma: no cover - manual interrupt
+            _log.info("interrupted; exiting")
         return
     try:
         asyncio.run(_run(transport))
