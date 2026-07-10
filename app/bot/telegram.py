@@ -185,17 +185,26 @@ class TelegramAdapter:
         )
 
     async def _set_menu_button(self) -> None:  # pragma: no cover - requires aiogram runtime
-        """Point the bot's menu button at the Mini App (if a URL is configured)."""
-        if not self._miniapp_url:
+        """Point the bot's menu button at the Mini App (if a valid URL is configured).
+
+        Best-effort and never fatal: a bad/misconfigured URL only skips the button,
+        it must not take down the bot (Telegram requires a https:// Web App URL).
+        """
+        url = self._miniapp_url.strip()
+        if not url:
+            return
+        if not url.startswith("https://"):
+            _log.warning("MINIAPP_URL must start with https:// — skipping menu button", extra={"url": url})
             return
         from aiogram.types import MenuButtonWebApp, WebAppInfo
 
-        await self._bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(
-                text="⚙️ Настройки", web_app=WebAppInfo(url=self._miniapp_url)
+        try:
+            await self._bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="⚙️ Настройки", web_app=WebAppInfo(url=url))
             )
-        )
-        _log.info("mini app menu button set", extra={"url": self._miniapp_url})
+            _log.info("mini app menu button set", extra={"url": url})
+        except Exception as exc:  # invalid URL / API hiccup — keep the bot running
+            _log.warning("failed to set menu button; continuing", extra={"error": str(exc)})
 
     async def run(self) -> None:  # pragma: no cover - requires network + token
         """Start long-polling. Blocks until cancelled."""
