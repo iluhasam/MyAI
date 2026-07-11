@@ -57,7 +57,7 @@ class TelegramAdapter:
             # Commands are instant — no need for a thinking animation.
             if (message.text or "").startswith("/"):
                 reply = await self._gateway.handle(raw)
-                await message.answer(reply.text, reply_markup=self._keyboard(reply))
+                await self._safe_answer(message, reply.text, self._keyboard(reply))
                 return
 
             # LLM turn: show an animated placeholder + typing action while working,
@@ -69,23 +69,52 @@ class TelegramAdapter:
             finally:
                 anim.cancel()
                 await asyncio.gather(anim, return_exceptions=True)  # ensure it stopped
-            kb = self._keyboard(reply)
-            try:
-                await placeholder.edit_text(reply.text, reply_markup=kb)
-            except Exception:  # answer too long / not editable -> send fresh
-                await message.answer(reply.text, reply_markup=kb)
+            await self._safe_edit(placeholder, reply.text, self._keyboard(reply))
 
         @self._dp.callback_query()
         async def _on_callback(callback: "types.CallbackQuery") -> None:
             # A button press re-enters the pipeline as the command "/{action}",
             # reusing every command handler; then we edit the message in place.
             reply = await self._gateway.handle(self._callback_raw(callback))
-            kb = self._keyboard(reply)
-            try:
-                await callback.message.edit_text(reply.text, reply_markup=kb)
-            except Exception:  # e.g. "message is not modified" / too old
-                await callback.message.answer(reply.text, reply_markup=kb)
+            await self._safe_edit(callback.message, reply.text, self._keyboard(reply))
             await callback.answer()
+
+    # -- outbound rendering (Markdown-ish -> Telegram HTML, never fatal) ----
+    @staticmethod
+    def _render(text: str) -> str:
+        """Turn **bold**/*italic* into Telegram HTML, escaping the rest.
+
+        HTML-escape first so model output can't inject tags, then convert the
+        emphasis markers. A lone/odd marker just stays literal — no parse error.
+        """
+        import html
+        import re
+
+        esc = html.escape(text, quote=False)
+        esc = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", esc, flags=re.S)
+        esc = re.sub(r"\*(.+?)\*", r"<i>\1</i>", esc, flags=re.S)
+        return esc
+
+    async def _safe_answer(self, message: Any, text: str, reply_markup: Any = None) -> None:  # pragma: no cover - aiogram runtime
+        """Send ``text`` as HTML; on any parse issue fall back to plain text."""
+        from aiogram.exceptions import TelegramBadRequest
+
+        try:
+            await message.answer(self._render(text), reply_markup=reply_markup, parse_mode="HTML")
+        except TelegramBadRequest:
+            await message.answer(text, reply_markup=reply_markup)
+
+    async def _safe_edit(self, msg: Any, text: str, reply_markup: Any = None) -> None:  # pragma: no cover - aiogram runtime
+        """Edit ``msg`` to ``text`` as HTML; fall back to plain, then to a fresh send."""
+        from aiogram.exceptions import TelegramBadRequest
+
+        try:
+            await msg.edit_text(self._render(text), reply_markup=reply_markup, parse_mode="HTML")
+        except TelegramBadRequest:
+            try:
+                await msg.edit_text(text, reply_markup=reply_markup)
+            except TelegramBadRequest:
+                await msg.answer(text, reply_markup=reply_markup)
 
     async def _animate(self, chat_id: int, placeholder: Any) -> None:  # pragma: no cover - aiogram runtime
         """Cycle the placeholder through 'thinking' frames + keep 'typing…' alive."""
