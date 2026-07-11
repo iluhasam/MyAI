@@ -28,7 +28,13 @@ class Persona:
 # Curated default personas. The default ("обычный") adds no extra styling on top
 # of the base system prompt, preserving the out-of-the-box behaviour.
 _DEFAULT_PERSONAS: tuple[Persona, ...] = (
-    Persona("обычный", "Обычный — нейтральный помощник", ""),
+    Persona(
+        "обычный",
+        "Обычный — дружелюбный помощник",
+        "Общайся живо и естественно, по-дружески, тёплым человеческим тоном, на «ты», с "
+        "уместными эмодзи (без перебора). Если уместно — можешь мягко пошутить. Отвечай "
+        "по делу, без занудных дисклеймеров и морализаторства, если о них не просят.",
+    ),
     Persona(
         "философ",
         "Философ — глубокие рассуждения",

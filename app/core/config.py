@@ -56,8 +56,6 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
     # Direct Google Gemini key (free tier); used for catalog `gemini/*` routes.
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
-    # Direct DeepSeek key (native API); used for catalog `deepseek/*` routes.
-    deepseek_api_key: str = Field(default="", alias="DEEPSEEK_API_KEY")
     # Alias (from the catalog) used when a user hasn't picked a model yet.
     default_model: str = Field(default="gpt-4o-mini", alias="DEFAULT_MODEL")
     # Embedding model for semantic memory. Chat models can't embed, so this is a
