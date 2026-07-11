@@ -25,11 +25,11 @@ RUN pip install -r requirements.txt \
 # Application code.
 COPY app ./app
 
-# Run as a non-root user; ensure the SQLite data dir is writable.
-RUN useradd --create-home --uid 10001 appuser \
-    && mkdir -p /app/data \
-    && chown -R appuser:appuser /app
-USER appuser
+# SQLite data dir. We run as root (the default): hosted persistent volumes
+# (Railway/Fly) are mounted root-owned, and a non-root user can't open the
+# SQLite file on them ("unable to open database file"). The container is
+# isolated, so root inside it is acceptable here.
+RUN mkdir -p /app/data
 
 EXPOSE 8000
 
