@@ -86,6 +86,16 @@ class TelegramAdapter:
             await callback.answer()
 
     # -- outbound rendering (Markdown-ish -> Telegram HTML, never fatal) ----
+    #: Telegram rejects messages longer than this; keep a margin for UTF-16 emoji.
+    _MAX_LEN = 4000
+
+    @classmethod
+    def _clip(cls, text: str) -> str:
+        """Trim to Telegram's message-length limit so long replies don't fail to send."""
+        if len(text) <= cls._MAX_LEN:
+            return text
+        return text[: cls._MAX_LEN - 1].rstrip() + "…"
+
     @staticmethod
     def _render(text: str) -> str:
         """Turn **bold**/*italic* into Telegram HTML, escaping the rest.
@@ -105,6 +115,7 @@ class TelegramAdapter:
         """Send ``text`` as HTML; on any parse issue fall back to plain text."""
         from aiogram.exceptions import TelegramBadRequest
 
+        text = self._clip(text)
         try:
             await message.answer(self._render(text), reply_markup=reply_markup, parse_mode="HTML")
         except TelegramBadRequest:
@@ -114,6 +125,7 @@ class TelegramAdapter:
         """Edit ``msg`` to ``text`` as HTML; fall back to plain, then to a fresh send."""
         from aiogram.exceptions import TelegramBadRequest
 
+        text = self._clip(text)
         try:
             await msg.edit_text(self._render(text), reply_markup=reply_markup, parse_mode="HTML")
         except TelegramBadRequest:

@@ -25,3 +25,10 @@ def test_lone_marker_stays_literal():
 
 def test_plain_text_unchanged():
     assert _render("просто текст без разметки") == "просто текст без разметки"
+
+
+def test_clip_long_text_to_telegram_limit():
+    clip = TelegramAdapter._clip
+    assert clip("короткий") == "короткий"  # short text untouched
+    out = clip("x" * 9000)
+    assert len(out) <= TelegramAdapter._MAX_LEN and out.endswith("…")
