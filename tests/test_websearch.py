@@ -72,3 +72,15 @@ def test_planner_arithmetic_still_wins():
 def test_planner_plain_message_needs_no_tools():
     plan = Planner().plan(_payload("расскажи анекдот"), _CTX)
     assert plan.steps == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "как приготовить свежую рыбу",   # 'свеж' must not trigger search
+        "в последний раз это было давно",  # 'последн' must not trigger search
+        "как найти себя в жизни",        # 'найти' (infinitive) is not 'найди'
+    ],
+)
+def test_planner_no_false_positive_search(text):
+    assert Planner().plan(_payload(text), _CTX).steps == []
