@@ -204,13 +204,17 @@ class TelegramAdapter:
         elif text.startswith("/"):
             msg_type = "command"
 
+        # from_user is absent for channel posts / anonymous admins — fall back to
+        # the chat id so we never crash on message.from_user.<attr>.
+        user = message.from_user
+        user_id = user.id if user else message.chat.id
         return {
             "channel": "telegram",
-            "external_user_id": str(message.from_user.id),
+            "external_user_id": str(user_id),
             "message_type": msg_type,
             "text": text,
-            "display_name": message.from_user.full_name,
-            "language": message.from_user.language_code or "ru",
+            "display_name": user.full_name if user else None,
+            "language": (user.language_code if user else None) or "ru",
             "attachments": attachments,
         }
 
