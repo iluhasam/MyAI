@@ -81,9 +81,13 @@ class TelegramAdapter:
         async def _on_callback(callback: "types.CallbackQuery") -> None:
             # A button press re-enters the pipeline as the command "/{action}",
             # reusing every command handler; then we edit the message in place.
-            reply = await self._gateway.handle(self._callback_raw(callback))
-            await self._safe_edit(callback.message, reply.text, self._keyboard(reply))
-            await callback.answer()
+            try:
+                reply = await self._gateway.handle(self._callback_raw(callback))
+                await self._safe_edit(callback.message, reply.text, self._keyboard(reply))
+            except Exception:  # never leave the button spinner stuck
+                _log.exception("callback handling failed")
+            finally:
+                await callback.answer()
 
     # -- outbound rendering (Markdown-ish -> Telegram HTML, never fatal) ----
     #: Telegram rejects messages longer than this; keep a margin for UTF-16 emoji.
