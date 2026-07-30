@@ -56,8 +56,12 @@ class TelegramAdapter:
             raw = self._to_raw(message)
             # Commands are instant — no need for a thinking animation.
             if (message.text or "").startswith("/"):
-                reply = await self._gateway.handle(raw)
-                await self._safe_answer(message, reply.text, self._keyboard(reply))
+                try:
+                    reply = await self._gateway.handle(raw)
+                    await self._safe_answer(message, reply.text, self._keyboard(reply))
+                except Exception:  # command handler failure — reply instead of crashing
+                    _log.exception("command handling failed")
+                    await self._safe_answer(message, "Что-то пошло не так, попробуй ещё раз 🙏", None)
                 return
 
             # LLM turn: show an animated placeholder + typing action while working,
