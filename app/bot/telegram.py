@@ -128,10 +128,16 @@ class TelegramAdapter:
         text = self._clip(text)
         try:
             await msg.edit_text(self._render(text), reply_markup=reply_markup, parse_mode="HTML")
-        except TelegramBadRequest:
+        except TelegramBadRequest as exc:
+            # Re-clicking a button that changes nothing: leave the message as-is
+            # instead of spamming a duplicate.
+            if "not modified" in str(exc).lower():
+                return
             try:
                 await msg.edit_text(text, reply_markup=reply_markup)
-            except TelegramBadRequest:
+            except TelegramBadRequest as exc2:
+                if "not modified" in str(exc2).lower():
+                    return
                 await msg.answer(text, reply_markup=reply_markup)
 
     async def _animate(self, chat_id: int, placeholder: Any) -> None:  # pragma: no cover - aiogram runtime
