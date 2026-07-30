@@ -96,6 +96,12 @@ class TelegramAdapter:
             return text
         return text[: cls._MAX_LEN - 1].rstrip() + "…"
 
+    @classmethod
+    def _prepare(cls, text: str) -> str:
+        """Clip and guard against empty/blank text (Telegram rejects empty messages)."""
+        clipped = cls._clip(text)
+        return clipped if clipped.strip() else "…"
+
     @staticmethod
     def _render(text: str) -> str:
         """Turn **bold**/*italic* into Telegram HTML, escaping the rest.
@@ -115,7 +121,7 @@ class TelegramAdapter:
         """Send ``text`` as HTML; on any parse issue fall back to plain text."""
         from aiogram.exceptions import TelegramBadRequest
 
-        text = self._clip(text)
+        text = self._prepare(text)
         try:
             await message.answer(self._render(text), reply_markup=reply_markup, parse_mode="HTML")
         except TelegramBadRequest:
@@ -125,7 +131,7 @@ class TelegramAdapter:
         """Edit ``msg`` to ``text`` as HTML; fall back to plain, then to a fresh send."""
         from aiogram.exceptions import TelegramBadRequest
 
-        text = self._clip(text)
+        text = self._prepare(text)
         try:
             await msg.edit_text(self._render(text), reply_markup=reply_markup, parse_mode="HTML")
         except TelegramBadRequest as exc:

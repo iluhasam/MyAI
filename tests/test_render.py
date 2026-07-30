@@ -32,3 +32,10 @@ def test_clip_long_text_to_telegram_limit():
     assert clip("короткий") == "короткий"  # short text untouched
     out = clip("x" * 9000)
     assert len(out) <= TelegramAdapter._MAX_LEN and out.endswith("…")
+
+
+def test_prepare_guards_empty_text():
+    prep = TelegramAdapter._prepare
+    assert prep("") == "…"       # Telegram rejects empty messages
+    assert prep("   ") == "…"    # blank too
+    assert prep("привет") == "привет"
