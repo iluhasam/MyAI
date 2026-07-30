@@ -64,12 +64,18 @@ class TelegramAdapter:
             # then morph the placeholder into the final answer.
             placeholder = await message.answer(_THINK_FRAMES[0])
             anim = asyncio.create_task(self._animate(message.chat.id, placeholder))
+            reply = None
             try:
                 reply = await self._gateway.handle(raw)
+            except Exception:  # gateway/normalisation failure — don't leave the user hanging
+                _log.exception("message handling failed")
             finally:
                 anim.cancel()
                 await asyncio.gather(anim, return_exceptions=True)  # ensure it stopped
-            await self._safe_edit(placeholder, reply.text, self._keyboard(reply))
+            if reply is None:
+                await self._safe_edit(placeholder, "Что-то пошло не так, попробуй ещё раз 🙏", None)
+            else:
+                await self._safe_edit(placeholder, reply.text, self._keyboard(reply))
 
         @self._dp.callback_query()
         async def _on_callback(callback: "types.CallbackQuery") -> None:
