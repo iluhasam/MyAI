@@ -34,6 +34,8 @@ _DEFAULT_MODELS: tuple[ModelInfo, ...] = (
     ModelInfo("gemini", "gemini/gemini-2.5-flash", "Google Gemini 2.5 Flash — прямой Google, free tier"),
     ModelInfo("llama", "openrouter/meta-llama/llama-3.1-8b-instruct", "Meta Llama 3.1 8B — дешёвая"),
     ModelInfo("deepseek", "openrouter/deepseek/deepseek-chat", "DeepSeek Chat — дешёвая, дерзкая"),
+    ModelInfo("kimi", "openrouter/moonshotai/kimi-k2", "Kimi K2 — через OpenRouter (запасной)"),
+    ModelInfo("kimi-k3", "moonshot/kimi-k3", "Kimi K3 — прямой Moonshot API (китайский, 50М токенов)"),
 )
 
 

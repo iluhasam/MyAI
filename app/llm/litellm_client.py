@@ -60,7 +60,11 @@ class LiteLLMClient:
                 max_tokens=max_tokens,
                 api_key=self._api_key,
             )
-            return resp["choices"][0]["message"]["content"] or ""
+            msg = resp["choices"][0]["message"]
+            content = msg["content"] or ""
+            if not content:  # reasoning models (Kimi K3) may put text in reasoning_content
+                content = getattr(msg, "reasoning_content", None) or ""
+            return content
 
         return await self._with_retries(_call)
 

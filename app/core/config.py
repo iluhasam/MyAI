@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
     # Direct Google Gemini key (free tier); used for catalog `gemini/*` routes.
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    # Direct Moonshot/Kimi key (native API); used for catalog `moonshot/*` routes.
+    # Base defaults to the China endpoint (the international one is a separate account).
+    moonshot_api_key: str = Field(default="", alias="MOONSHOT_API_KEY")
+    moonshot_api_base: str = Field(
+        default="https://api.moonshot.cn/v1", alias="MOONSHOT_API_BASE"
+    )
     # Alias (from the catalog) used when a user hasn't picked a model yet.
     default_model: str = Field(default="gpt-4o-mini", alias="DEFAULT_MODEL")
     # Embedding model for semantic memory. Chat models can't embed, so this is a
